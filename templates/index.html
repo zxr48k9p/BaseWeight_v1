@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BaseWeight</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --bs-primary: #6b8e23; /* Olive Drab */
+            --bs-primary-rgb: 107, 142, 35;
+            --bs-success: #556b2f; /* Dark Olive Green */
+            --bs-success-rgb: 85, 107, 47;
+            --bs-body-bg: #0f0f0f;
+            --bs-body-color: #e0e0e0;
+            --accent-color: #d35400; /* Burnt Orange for contrast */
+        }
+        body {
+            /* Moody Mountain Background */
+            background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.8)), 
+                        url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=2000&auto=format&fit=crop');
+            background-size: cover;
+            background-attachment: fixed;
+            background-position: center;
+        }
+        .card {
+            /* Glassmorphism Effect */
+            background-color: rgba(30, 30, 30, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .category-card { margin-bottom: 20px; border-left: 4px solid var(--bs-primary); }
+        .total-box { 
+            background-color: rgba(20, 20, 20, 0.95); 
+            padding: 20px; border-radius: 10px; position: sticky; top: 20px; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            z-index: 1000;
+        }
+        
+        /* Custom Button Styling */
+        .btn-primary { background-color: var(--bs-primary); border-color: var(--bs-primary); }
+        .btn-success { background-color: var(--accent-color); border-color: var(--accent-color); }
+        .btn-success:hover { background-color: #a04000; border-color: #a04000; }
+
+        /* Form inputs to match darker theme */
+        .form-control, .form-select { background-color: rgba(0,0,0,0.3); border-color: #444; color: #e0e0e0; }
+        .form-control:focus, .form-select:focus { 
+            background-color: rgba(0,0,0,0.5); color: #fff; border-color: var(--bs-primary); 
+            box-shadow: 0 0 0 0.25rem rgba(107, 142, 35, 0.25); 
+        }
+        
+        h1 { text-shadow: 2px 2px 4px rgba(0,0,0,0.8); font-weight: 700; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+
+<div class="container py-5 position-relative">
+    <div class="position-absolute top-0 end-0 mt-4 me-3">
+        <a href="{{ url_for('settings') }}" class="btn btn-outline-light btn-sm me-2">
+            <i class="bi bi-gear"></i> Settings
+        </a>
+        <button onclick="closeApp()" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-power"></i> Close App
+        </button>
+    </div>
+    <h1 class="mb-4 text-center"><i class="bi bi-compass"></i> BaseWeight Planner</h1>
+
+    <!-- Icon Mapping for Categories -->
+    {% set icon_map = {
+        'Backpack': 'bi-backpack',
+        'Chestpack': 'bi-bag-plus',
+        'Shelter': 'bi-tent',
+        'Sleep System': 'bi-moon-stars',
+        'Cook System': 'bi-fire',
+        'Clothing': 'bi-person-standing',
+        'Water': 'bi-droplet',
+        'Lighting': 'bi-lightbulb',
+        'Comfort': 'bi-emoji-smile',
+        'Commodities': 'bi-box-seam'
+    } %}
+
+    <form action="{{ url_for('update_kit', kit_id=edit_kit.id) if edit_kit else '/save_kit' }}" method="POST" id="kitForm">
+    <div class="row">
+        <!-- LEFT COLUMN: Calculator -->
+        <div class="col-md-8">
+                
+                <!-- Loop through categories to create sections -->
+                {% for category in categories %}
+                <div class="card category-card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold text-uppercase small ls-1">
+                            <i class="{{ icon_map.get(category, 'bi-gear') }} me-2"></i> {{ category }}
+                        </span>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="addItemRow(this)">+</button>
+                    </div>
+                    <div class="card-body items-container">
+                        {# Determine if we are editing and have items for this category #}
+                        {% set current_cat_items = edit_kit_items_by_cat[category] if edit_kit and edit_kit_items_by_cat else [] %}
+                        
+                        {# If no items in this category (or new kit), create a dummy list with one None item to render one empty row #}
+                        {% set rows_to_render = current_cat_items if current_cat_items else [None] %}
+
+                        {% for saved_item in rows_to_render %}
+                        <div class="row item-row mb-3 border-bottom pb-3">
+                            <div class="col-md-6">
+                                <label>Select Item:</label>
+                                <select class="form-select item-select" name="selected_items" onchange="updateRow(this)">
+                                    <option value="0" data-weight="0" data-cost="0" data-notes="">-- None --</option>
+                                    {% for item in items_by_cat[category] %}
+                                    <option value="{{ item.id }}" {% if saved_item and saved_item.id == item.id %}selected{% endif %}
+                                            data-weight="{{ item.weight }}" 
+                                            data-cost="{{ item.cost }}"
+                                            data-notes="{{ item.notes }}">
+                                        {{ item.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label>Weight:</label>
+                                <input type="text" class="form-control weight-display" readonly value="0">
+                            </div>
+                            <div class="col-md-2">
+                                <label>Cost ({{ settings.currency_symbol }}):</label>
+                                <input type="text" class="form-control cost-display" readonly value="0">
+                            </div>
+                            <div class="col-md-2">
+                                <label>Action</label>
+                                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeRow(this)">Remove</button>
+                            </div>
+                            <div class="col-12 mt-2">
+                                <small class="text-muted">Notes: <span class="notes-display fst-italic"></span></small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+        </div>
+
+        <!-- RIGHT COLUMN: Totals & Inventory Management -->
+        <div class="col-md-4">
+            <!-- Totals -->
+            <div class="total-box shadow-sm mb-4">
+                <h3>Totals</h3>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <span>Total Weight:</span>
+                    <span class="fw-bold" id="grandTotalWeight">0.00 kg (0 g)</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Total Cost:</span>
+                    <span class="fw-bold">{{ settings.currency_symbol }}<span id="grandTotalCost">0</span></span>
+                </div>
+            </div>
+
+            <!-- View Inventory Button -->
+            <a href="{{ url_for('inventory') }}" class="btn btn-outline-light w-100 mb-2">View Full Inventory</a>
+
+            <!-- Add New Item Button -->
+            <button class="btn btn-primary w-100 mb-4" data-bs-toggle="modal" data-bs-target="#addItemModal">
+                + Add New Item to Inventory
+            </button>
+
+            <!-- Saved Kits List -->
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Saved Kits</span>
+                    <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#importKitModal"><i class="bi bi-upload"></i> Import</button>
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% for kit in kits %}
+                    <a href="{{ url_for('view_kit', kit_id=kit.id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ kit.name }}</strong><br>
+                            <small class="text-muted">{{ kit.total_weight|format_weight }} | {{ settings.currency_symbol }}{{ kit.total_cost }}</small>
+                        </div>
+                    </a>
+                    {% else %}
+                    <li class="list-group-item text-muted">No saved kits yet.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Save Kit Section (Moved) -->
+            <div class="card shadow-sm mt-4 mb-4">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Kit Name</label>
+                        <input type="text" name="kit_name" class="form-control" placeholder="e.g., Summer Ultralight" value="{{ edit_kit.name if edit_kit else '' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description / Notes</label>
+                        <textarea name="kit_notes" class="form-control" rows="2" placeholder="Trip details, weather conditions, etc.">{{ edit_kit.notes if edit_kit else '' }}</textarea>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success btn-lg">{{ 'Update Kit' if edit_kit else 'Save Kit' }}</button>
+                        {% if edit_kit %}
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Cancel</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </form>
+</div>
+
+<!-- Modal: Add Item -->
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="/add_item" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add to Inventory</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label>Name</label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Category</label>
+                        <select name="category" class="form-select">
+                            {% for category in categories %}
+                            <option value="{{ category }}">{{ category }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label>Weight (g)</label>
+                            <input type="number" step="0.01" name="weight" class="form-control" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label>Cost ({{ settings.currency_symbol }})</label>
+                            <input type="number" step="0.01" name="cost" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label>Image</label>
+                        <input type="file" name="image" class="form-control" accept="image/*">
+                    </div>
+                    <div class="mb-3">
+                        <label>Notes</label>
+                        <textarea name="notes" class="form-control"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Add Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Import Kit -->
+<div class="modal fade" id="importKitModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="/kit/import_json" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Import Kit</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Upload a <code>.json</code> kit file. Missing items will be added to your inventory automatically.</p>
+                    <input type="file" name="kit_file" class="form-control" accept=".json" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function addItemRow(btn) {
+        const card = btn.closest('.card');
+        const container = card.querySelector('.items-container');
+        const firstRow = container.querySelector('.item-row');
+        
+        // Clone the first row to create a new one
+        const newRow = firstRow.cloneNode(true);
+        
+        // Reset values in the new row
+        const select = newRow.querySelector('select');
+        select.selectedIndex = 0;
+        newRow.querySelector('.weight-display').value = 0;
+        newRow.querySelector('.cost-display').value = 0;
+        newRow.querySelector('.notes-display').textContent = "";
+        
+        container.appendChild(newRow);
+    }
+
+    // Initialize rows on load (for Edit Mode)
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.item-select').forEach(select => {
+            if (select.value !== "0") {
+                updateRow(select);
+            }
+        });
+    });
+
+    function removeRow(btn) {
+        const row = btn.closest('.item-row');
+        const container = row.parentElement;
+        
+        // If it's the only row, just reset it instead of removing
+        if (container.querySelectorAll('.item-row').length === 1) {
+            const select = row.querySelector('select');
+            select.selectedIndex = 0;
+            updateRow(select);
+        } else {
+            row.remove();
+            calculateGrandTotals();
+        }
+    }
+
+    // Function called whenever a dropdown changes
+    function updateRow(selectElement) {
+        // Get the selected option
+        const selectedOption = selectElement.options[selectElement.selectedIndex];
+        
+        // Get data attributes
+        const weight = parseFloat(selectedOption.getAttribute('data-weight')) || 0;
+        const cost = parseFloat(selectedOption.getAttribute('data-cost')) || 0;
+        const notes = selectedOption.getAttribute('data-notes') || "";
+
+        // Find the parent row to scope our search for input fields
+        const row = selectElement.closest('.item-row');
+        
+        // Update the display inputs
+        row.querySelector('.weight-display').value = weight;
+        row.querySelector('.cost-display').value = cost;
+        row.querySelector('.notes-display').textContent = notes;
+
+        calculateGrandTotals();
+    }
+
+    function calculateGrandTotals() {
+        const weightUnit = "{{ settings.weight_unit }}";
+        let totalWeight = 0;
+        let totalCost = 0;
+
+        // Loop through all dropdowns
+        document.querySelectorAll('.item-select').forEach(select => {
+            const selectedOption = select.options[select.selectedIndex];
+            totalWeight += parseFloat(selectedOption.getAttribute('data-weight')) || 0;
+            totalCost += parseFloat(selectedOption.getAttribute('data-cost')) || 0;
+        });
+
+        if (weightUnit === 'imperial') {
+            const lbs = (totalWeight * 0.00220462).toFixed(2);
+            const oz = (totalWeight * 0.035274).toFixed(1);
+            document.getElementById('grandTotalWeight').textContent = `${lbs} lbs (${oz} oz)`;
+        } else {
+            const kg = (totalWeight / 1000).toFixed(2);
+            document.getElementById('grandTotalWeight').textContent = `${kg} kg (${totalWeight.toFixed(0)} g)`;
+        }
+        document.getElementById('grandTotalCost').textContent = totalCost.toFixed(2);
+    }
+
+    function closeApp() {
+        if (confirm("Are you sure you want to close the application?")) {
+            fetch('/shutdown')
+                .then(response => {
+                    document.body.innerHTML = '<div class="d-flex justify-content-center align-items-center vh-100 text-white"><h1>Application Closed</h1><p class="ms-3">You can close this tab.</p></div>';
+                    window.close();
+                })
+                .catch(error => console.error('Error:', error));
+        }
+    }
+</script>
+
+</body>
+</html>

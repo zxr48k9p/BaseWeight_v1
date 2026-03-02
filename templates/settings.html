@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --bs-primary: #6b8e23;
+            --bs-body-bg: #0f0f0f;
+            --bs-body-color: #e0e0e0;
+        }
+        body {
+            background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.8)), 
+                        url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=2000&auto=format&fit=crop');
+            background-size: cover;
+            background-attachment: fixed;
+            background-position: center;
+        }
+        .card {
+            background-color: rgba(30, 30, 30, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-gear"></i> Settings</h1>
+        <a href="{{ url_for('index') }}" class="btn btn-outline-light">Back to Planner</a>
+    </div>
+
+    <div class="row">
+        <!-- General Settings -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold">Preferences</div>
+                <div class="card-body">
+                    <form action="/settings" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label">Currency Symbol</label>
+                            <input type="text" name="currency_symbol" class="form-control" value="{{ settings.currency_symbol }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Username Alias</label>
+                            <input type="text" name="username" class="form-control" value="{{ settings.username or '' }}" placeholder="e.g. MountainWalker99">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Weight Unit</label>
+                            <select name="weight_unit" class="form-select">
+                                <option value="metric" {% if settings.weight_unit == 'metric' %}selected{% endif %}>Metric (kg / g)</option>
+                                <option value="imperial" {% if settings.weight_unit == 'imperial' %}selected{% endif %}>Imperial (lbs / oz)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Save Preferences</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup & Restore -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold">Data Management</div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="form-label">Backup Database</label>
+                        <p class="small text-muted">Download a JSON file containing all your items and kits.</p>
+                        <a href="{{ url_for('download_backup') }}" class="btn btn-outline-success w-100">
+                            <i class="bi bi-download"></i> Download Backup
+                        </a>
+                    </div>
+                    <hr>
+                    <div>
+                        <label class="form-label">Restore Database</label>
+                        <p class="small text-muted text-danger">Warning: This will replace all current data!</p>
+                        <form action="/backup/upload" method="POST" enctype="multipart/form-data">
+                            <div class="input-group">
+                                <input type="file" name="backup_file" class="form-control" accept=".json" required>
+                                <button type="submit" class="btn btn-danger">Restore</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

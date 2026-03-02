@@ -1,0 +1,13 @@
+# Database
+*.db
+
+# User Uploads
+uploads/
+
+# PyInstaller files
+dist/
+build/
+*.spec
+
+# Python cache
+__pycache__/
