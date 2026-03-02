@@ -139,7 +139,13 @@
                         <td><span class="badge">{{ item.category }}</span></td>
                         <td>{{ item.name }}</td>
                         <td class="text-muted small">{{ item.notes }}</td>
-                        <td class="text-end">{{ item.weight|format_weight }}</td>
+                        <td class="text-end">
+                            {% if settings.weight_unit == 'imperial' %}
+                                {{ (item.weight * 0.035274)|round(1) }} oz
+                            {% else %}
+                                {{ item.weight|int }} g
+                            {% endif %}
+                        </td>
                         <td class="text-end">{{ item.cost }}</td>
                     </tr>
                     {% endfor %}
