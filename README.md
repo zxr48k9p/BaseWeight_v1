@@ -11,6 +11,9 @@ BaseWeight is a desktop application designed to help hikers and backpackers plan
 ### Exported Kit Example
 ![Exported Kit](screenshots/Winter_kit.png)
 
+### Settings & Customization
+![Settings Page](screenshots/settings.jpg)
+
 ## KEY FEATURES
 * **Inventory Management:** Add gear with weight, cost, notes, and images.
 * **Kit Planner:** Create custom kits from your inventory with drag-and-drop ease.
@@ -19,7 +22,8 @@ BaseWeight is a desktop application designed to help hikers and backpackers plan
   - **PDF:** Professional reports with charts and checklists.
   - **Image:** Save your kit summary as a PNG.
   - **JSON:** Share editable kit files with friends.
-* **Customization:** Supports Metric (kg/g) & Imperial (lbs/oz) units.
+* **Customization:** Set your username alias, preferred currency symbol, and choose between Metric (kg/g) & Imperial (lbs/oz) units.
+* **Data Management:** Backup your entire inventory and kits to a JSON file, and restore from it later.
 
 ## HOW TO RUN (Windows Executable)
 1. Locate `BaseWeight.exe` in the folder.
