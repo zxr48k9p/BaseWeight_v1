@@ -116,37 +116,42 @@
     <!-- Items Table -->
     <div class="card shadow-sm">
         <div class="card-header">Kit Contents</div>
-        <div class="card-body p-0">
-            <table class="table table-striped table-hover mb-0">
+        <div class="card-body p-0 table-responsive">
+            <table class="table table-striped table-hover mb-0 align-middle">
                 <thead>
                     <tr>
-                        <th>Img</th>
-                        <th>Category</th>
+                        <th class="d-none d-sm-table-cell">Img</th>
+                        <th class="d-none d-md-table-cell">Category</th>
                         <th>Item Name</th>
-                        <th>Notes</th>
-                        <th class="text-end">Weight</th>
-                        <th class="text-end">Cost ({{ settings.currency_symbol }})</th>
+                        <th class="d-none d-lg-table-cell">Notes</th>
+                        <th class="text-end text-nowrap">Weight</th>
+                        <th class="text-end text-nowrap">Cost ({{ settings.currency_symbol }})</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in items %}
                     <tr>
-                        <td>
+                        <td class="d-none d-sm-table-cell">
                             {% if item.image_filename %}
                             <img src="{{ url_for('uploaded_file', filename=item.image_filename) }}" class="img-thumbnail-small" onmouseenter="showPreview(this.src)" onmouseleave="hidePreview()" onclick="viewImage(this.src)">
                             {% endif %}
                         </td>
-                        <td><span class="badge">{{ item.category }}</span></td>
-                        <td>{{ item.name }}</td>
-                        <td class="text-muted small">{{ item.notes }}</td>
-                        <td class="text-end">
+                        <td class="d-none d-md-table-cell"><span class="badge">{{ item.category }}</span></td>
+                        <td>
+                            <div class="fw-bold">{{ item.name }}</div>
+                            <div class="d-md-none small mt-1">
+                                <span class="badge bg-secondary me-1">{{ item.category }}</span>
+                            </div>
+                        </td>
+                        <td class="text-muted small d-none d-lg-table-cell">{{ item.notes }}</td>
+                        <td class="text-end text-nowrap">
                             {% if settings.weight_unit == 'imperial' %}
                                 {{ (item.weight * 0.035274)|round(1) }} oz
                             {% else %}
                                 {{ item.weight|int }} g
                             {% endif %}
                         </td>
-                        <td class="text-end">{{ item.cost }}</td>
+                        <td class="text-end text-nowrap">{{ item.cost }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
