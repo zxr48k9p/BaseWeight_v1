@@ -52,12 +52,24 @@
         }
         
         h1 { text-shadow: 2px 2px 4px rgba(0,0,0,0.8); font-weight: 700; letter-spacing: 1px; }
+
+        /* Mobile Optimizations */
+        @media (max-width: 767.98px) {
+            .header-actions {
+                position: static !important;
+                display: flex;
+                justify-content: center;
+                margin-bottom: 1rem;
+                margin-top: 1rem !important;
+            }
+            body { padding-bottom: 80px; } /* Space for sticky footer */
+        }
     </style>
 </head>
 <body>
 
 <div class="container py-5 position-relative">
-    <div class="position-absolute top-0 end-0 mt-4 me-3">
+    <div class="header-actions position-absolute top-0 end-0 mt-4 me-3">
         <a href="{{ url_for('settings') }}" class="btn btn-outline-light btn-sm me-2">
             <i class="bi bi-gear"></i> Settings
         </a>
@@ -107,7 +119,7 @@
 
                         {% for saved_item in rows_to_render %}
                         <div class="row item-row mb-3 border-bottom pb-3">
-                            <div class="col-md-6">
+                            <div class="col-12 col-md-6 mb-2 mb-md-0">
                                 <label>Select Item:</label>
                                 <select class="form-select item-select" name="selected_items" onchange="updateRow(this)">
                                     <option value="0" data-weight="0" data-cost="0" data-notes="">-- None --</option>
@@ -121,16 +133,17 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-2">
-                                <label>Weight:</label>
+                            <div class="col-4 col-md-2">
+                                <label class="small">Weight:</label>
                                 <input type="text" class="form-control weight-display" readonly value="0">
                             </div>
-                            <div class="col-md-2">
-                                <label>Cost ({{ settings.currency_symbol }}):</label>
+                            <div class="col-4 col-md-2">
+                                <label class="small">Cost ({{ settings.currency_symbol }}):</label>
                                 <input type="text" class="form-control cost-display" readonly value="0">
                             </div>
-                            <div class="col-md-2">
-                                <label>Action</label>
+                            <div class="col-4 col-md-2">
+                                <label class="d-none d-md-block">Action</label>
+                                <label class="d-block d-md-none">&nbsp;</label>
                                 <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeRow(this)">Remove</button>
                             </div>
                             <div class="col-12 mt-2">
@@ -209,6 +222,21 @@
         </div>
     </div>
     </form>
+</div>
+
+<!-- Mobile Sticky Footer for Totals -->
+<div class="fixed-bottom bg-dark border-top border-secondary p-2 d-md-none shadow-lg" style="z-index: 1050; background-color: rgba(20, 20, 20, 0.98) !important;">
+    <div class="d-flex justify-content-between align-items-center container">
+        <div>
+            <div class="small text-muted" style="font-size: 0.75rem;">Total Weight</div>
+            <div class="fw-bold text-white" id="mobileTotalWeight">0.00 kg</div>
+        </div>
+        <div>
+            <div class="small text-muted" style="font-size: 0.75rem;">Total Cost</div>
+            <div class="fw-bold text-white" id="mobileTotalCost">{{ settings.currency_symbol }}0</div>
+        </div>
+        <button type="button" onclick="document.getElementById('kitForm').submit()" class="btn btn-primary btn-sm px-4">Save</button>
+    </div>
 </div>
 
 <!-- Modal: Add Item -->
@@ -361,12 +389,18 @@
         if (weightUnit === 'imperial') {
             const lbs = (totalWeight * 0.00220462).toFixed(2);
             const oz = (totalWeight * 0.035274).toFixed(1);
-            document.getElementById('grandTotalWeight').textContent = `${lbs} lbs (${oz} oz)`;
+            const weightStr = `${lbs} lbs (${oz} oz)`;
+            document.getElementById('grandTotalWeight').textContent = weightStr;
+            if(document.getElementById('mobileTotalWeight')) document.getElementById('mobileTotalWeight').textContent = weightStr;
         } else {
             const kg = (totalWeight / 1000).toFixed(2);
-            document.getElementById('grandTotalWeight').textContent = `${kg} kg (${totalWeight.toFixed(0)} g)`;
+            const weightStr = `${kg} kg (${totalWeight.toFixed(0)} g)`;
+            document.getElementById('grandTotalWeight').textContent = weightStr;
+            if(document.getElementById('mobileTotalWeight')) document.getElementById('mobileTotalWeight').textContent = weightStr;
         }
-        document.getElementById('grandTotalCost').textContent = totalCost.toFixed(2);
+        const costStr = totalCost.toFixed(2);
+        document.getElementById('grandTotalCost').textContent = costStr;
+        if(document.getElementById('mobileTotalCost')) document.getElementById('mobileTotalCost').textContent = "{{ settings.currency_symbol }}" + costStr;
     }
 
     function closeApp() {

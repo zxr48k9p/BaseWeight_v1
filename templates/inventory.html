@@ -80,7 +80,7 @@
                             <th class="ps-3">Img</th>
                             <th class="ps-3 sortable" onclick="sortTable(0)">Category <i class="bi bi-arrow-down-up small text-muted"></i></th>
                             <th class="sortable" onclick="sortTable(1)">Name <i class="bi bi-arrow-down-up small text-muted"></i></th>
-                            <th>Notes</th>
+                            <th class="d-none d-md-table-cell">Notes</th>
                             <th class="text-end sortable" onclick="sortTable(3)">Weight <i class="bi bi-arrow-down-up small text-muted"></i></th>
                             <th class="text-end sortable" onclick="sortTable(4)">Cost ({{ settings.currency_symbol }}) <i class="bi bi-arrow-down-up small text-muted"></i></th>
                             <th class="text-end pe-3">Actions</th>
@@ -96,7 +96,7 @@
                             </td>
                             <td class="ps-3"><span class="badge">{{ item.category }}</span></td>
                             <td class="fw-bold">{{ item.name }}</td>
-                            <td class="text-muted small">{{ item.notes }}</td>
+                            <td class="text-muted small d-none d-md-table-cell">{{ item.notes }}</td>
                             <td class="text-end">{{ item.weight|format_weight }}</td>
                             <td class="text-end">{{ settings.currency_symbol }}{{ item.cost }}</td>
                             <td class="text-end pe-3">
