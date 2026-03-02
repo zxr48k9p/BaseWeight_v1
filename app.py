@@ -14,6 +14,8 @@ from reportlab.graphics.charts.piecharts import Pie
 from reportlab.graphics.charts.legends import Legend
 from reportlab.pdfgen import canvas
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from sqlalchemy import text
 
 # Determine if running as a compiled executable (PyInstaller)
@@ -34,6 +36,7 @@ else:
 # Database Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'gear.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
 
 # Upload Configuration
 UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
@@ -42,8 +45,22 @@ if not os.path.exists(UPLOAD_FOLDER):
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 db = SQLAlchemy(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 # --- Models ---
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -52,6 +69,7 @@ class Item(db.Model):
     cost = db.Column(db.Float, default=0.0)
     notes = db.Column(db.Text, nullable=True)
     image_filename = db.Column(db.String(255), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
 class Kit(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -62,12 +80,14 @@ class Kit(db.Model):
     # In a production app, you would use a Many-to-Many relationship table.
     item_ids = db.Column(db.String(500)) 
     notes = db.Column(db.Text, nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
 class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     currency_symbol = db.Column(db.String(5), default='£')
     weight_unit = db.Column(db.String(10), default='metric') # 'metric' or 'imperial'
     username = db.Column(db.String(100), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
 # Define our fixed categories
 CATEGORIES = [
@@ -78,19 +98,27 @@ CATEGORIES = [
 
 # --- Helpers & Context Processors ---
 
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 @app.context_processor
 def inject_settings():
     """Make settings available to all templates."""
-    settings = Settings.query.first()
+    if not current_user.is_authenticated:
+        return dict(settings=None)
+    settings = Settings.query.filter_by(user_id=current_user.id).first()
     if not settings:
-        settings = Settings(currency_symbol='£', weight_unit='metric')
+        settings = Settings(currency_symbol='£', weight_unit='metric', user_id=current_user.id)
         db.session.add(settings)
         db.session.commit()
     return dict(settings=settings)
 
 @app.template_filter('format_weight')
 def format_weight_filter(weight_g):
-    settings = Settings.query.first()
+    if not current_user.is_authenticated:
+        return f"{weight_g/1000:.2f} kg"
+    settings = Settings.query.filter_by(user_id=current_user.id).first()
     if settings and settings.weight_unit == 'imperial':
         lbs = weight_g * 0.00220462
         oz = weight_g * 0.035274
@@ -100,11 +128,51 @@ def format_weight_filter(weight_g):
 
 # --- Routes ---
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            login_user(user)
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error="Invalid username or password")
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if User.query.filter_by(username=username).first():
+            return render_template('register.html', error="Username already exists")
+        new_user = User(username=username)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+        seed_database(new_user.id)
+        login_user(new_user)
+        return redirect(url_for('index'))
+    return render_template('register.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     # Fetch all items to populate dropdowns
-    all_items = Item.query.all()
-    saved_kits = Kit.query.all()
+    all_items = Item.query.filter_by(user_id=current_user.id).all()
+    saved_kits = Kit.query.filter_by(user_id=current_user.id).all()
     
     # Organize items by category for the frontend
     items_by_cat = {cat: [] for cat in CATEGORIES}
@@ -115,6 +183,7 @@ def index():
     return render_template('index.html', categories=CATEGORIES, items_by_cat=items_by_cat, kits=saved_kits)
 
 @app.route('/add_item', methods=['POST'])
+@login_required
 def add_item():
     name = request.form.get('name')
     category = request.form.get('category')
@@ -129,14 +198,16 @@ def add_item():
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         image_filename = filename
 
-    new_item = Item(name=name, category=category, weight=weight, cost=cost, notes=notes, image_filename=image_filename)
+    new_item = Item(name=name, category=category, weight=weight, cost=cost, notes=notes, image_filename=image_filename, user_id=current_user.id)
     db.session.add(new_item)
     db.session.commit()
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/edit_item/<int:id>', methods=['POST'])
+@login_required
 def edit_item(id):
     item = Item.query.get_or_404(id)
+    if item.user_id != current_user.id: return redirect(url_for('index'))
     item.name = request.form.get('name')
     item.category = request.form.get('category')
     item.weight = request.form.get('weight')
@@ -153,8 +224,10 @@ def edit_item(id):
     return redirect(request.referrer or url_for('inventory'))
 
 @app.route('/edit_kit/<int:kit_id>')
+@login_required
 def edit_kit(kit_id):
     kit = Kit.query.get_or_404(kit_id)
+    if kit.user_id != current_user.id: return redirect(url_for('index'))
     # Parse IDs
     item_ids = [int(i) for i in kit.item_ids.split(',') if i]
     items_in_db = Item.query.filter(Item.id.in_(item_ids)).all()
@@ -170,8 +243,8 @@ def edit_kit(kit_id):
             edit_kit_items_by_cat[item.category].append(item)
 
     # Standard fetch for dropdowns
-    all_items = Item.query.all()
-    saved_kits = Kit.query.all()
+    all_items = Item.query.filter_by(user_id=current_user.id).all()
+    saved_kits = Kit.query.filter_by(user_id=current_user.id).all()
     items_by_cat = {cat: [] for cat in CATEGORIES}
     for item in all_items:
         if item.category in items_by_cat:
@@ -185,8 +258,10 @@ def edit_kit(kit_id):
                            edit_kit_items_by_cat=edit_kit_items_by_cat)
 
 @app.route('/update_kit/<int:kit_id>', methods=['POST'])
+@login_required
 def update_kit(kit_id):
     kit = Kit.query.get_or_404(kit_id)
+    if kit.user_id != current_user.id: return redirect(url_for('index'))
     kit.name = request.form.get('kit_name')
     kit.notes = request.form.get('kit_notes')
     
@@ -202,13 +277,16 @@ def update_kit(kit_id):
     return redirect(url_for('view_kit', kit_id=kit.id))
 
 @app.route('/delete_item/<int:id>')
+@login_required
 def delete_item(id):
     item = Item.query.get_or_404(id)
+    if item.user_id != current_user.id: return redirect(url_for('index'))
     db.session.delete(item)
     db.session.commit()
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/save_kit', methods=['POST'])
+@login_required
 def save_kit():
     kit_name = request.form.get('kit_name')
     kit_notes = request.form.get('kit_notes')
@@ -224,15 +302,17 @@ def save_kit():
     # Join IDs to store as string (e.g., "1,4,5")
     ids_str = ",".join(selected_ids)
     
-    new_kit = Kit(name=kit_name, total_weight=total_weight, total_cost=total_cost, item_ids=ids_str, notes=kit_notes)
+    new_kit = Kit(name=kit_name, total_weight=total_weight, total_cost=total_cost, item_ids=ids_str, notes=kit_notes, user_id=current_user.id)
     db.session.add(new_kit)
     db.session.commit()
     
     return redirect(url_for('index'))
 
 @app.route('/kit/<int:kit_id>')
+@login_required
 def view_kit(kit_id):
     kit = Kit.query.get_or_404(kit_id)
+    if kit.user_id != current_user.id: return redirect(url_for('index'))
     # Parse IDs
     item_ids = [int(i) for i in kit.item_ids.split(',') if i]
     
@@ -246,8 +326,9 @@ def view_kit(kit_id):
     return render_template('kit_details.html', kit=kit, items=kit_items)
 
 @app.route('/inventory')
+@login_required
 def inventory():
-    items = Item.query.order_by(Item.category, Item.name).all()
+    items = Item.query.filter_by(user_id=current_user.id).order_by(Item.category, Item.name).all()
     return render_template('inventory.html', items=items, categories=CATEGORIES)
 
 @app.route('/uploads/<filename>')
@@ -257,8 +338,10 @@ def uploaded_file(filename):
 
 # API Endpoint for JavaScript to fetch item details instantly
 @app.route('/api/item/<int:id>')
+@login_required
 def get_item_details(id):
     item = Item.query.get_or_404(id)
+    if item.user_id != current_user.id: return jsonify({})
     return jsonify({
         'weight': item.weight,
         'cost': item.cost,
@@ -266,8 +349,9 @@ def get_item_details(id):
     })
 
 @app.route('/settings', methods=['GET', 'POST'])
+@login_required
 def settings():
-    settings = Settings.query.first()
+    settings = Settings.query.filter_by(user_id=current_user.id).first()
     if request.method == 'POST':
         settings.currency_symbol = request.form.get('currency_symbol')
         settings.weight_unit = request.form.get('weight_unit')
@@ -277,10 +361,11 @@ def settings():
     return render_template('settings.html', settings=settings)
 
 @app.route('/backup/download')
+@login_required
 def download_backup():
     """Export database to JSON."""
-    items = Item.query.all()
-    kits = Kit.query.all()
+    items = Item.query.filter_by(user_id=current_user.id).all()
+    kits = Kit.query.filter_by(user_id=current_user.id).all()
     
     data = {
         "items": [{
@@ -306,6 +391,7 @@ def download_backup():
     )
 
 @app.route('/backup/upload', methods=['POST'])
+@login_required
 def upload_backup():
     """Import database from JSON."""
     if 'backup_file' not in request.files:
@@ -319,16 +405,16 @@ def upload_backup():
         data = json.load(file)
         
         # Clear existing data
-        db.session.query(Item).delete()
-        db.session.query(Kit).delete()
+        db.session.query(Item).filter_by(user_id=current_user.id).delete()
+        db.session.query(Kit).filter_by(user_id=current_user.id).delete()
         
         # Import Items
         for i in data.get('items', []):
-            db.session.add(Item(name=i['name'], category=i['category'], weight=i['weight'], cost=i['cost'], notes=i['notes']))
+            db.session.add(Item(name=i['name'], category=i['category'], weight=i['weight'], cost=i['cost'], notes=i['notes'], user_id=current_user.id))
             
         # Import Kits (Note: item_ids might be invalid if IDs shift, but we keep raw string)
         for k in data.get('kits', []):
-            db.session.add(Kit(name=k['name'], total_weight=k['total_weight'], total_cost=k['total_cost'], item_ids=k['item_ids']))
+            db.session.add(Kit(name=k['name'], total_weight=k['total_weight'], total_cost=k['total_cost'], item_ids=k['item_ids'], user_id=current_user.id))
             
         db.session.commit()
     except Exception as e:
@@ -337,9 +423,11 @@ def upload_backup():
     return redirect(url_for('settings'))
 
 @app.route('/kit/<int:kit_id>/export_json')
+@login_required
 def export_kit_json(kit_id):
     """Export a single kit and its items to JSON."""
     kit = Kit.query.get_or_404(kit_id)
+    if kit.user_id != current_user.id: return redirect(url_for('index'))
     # Parse IDs
     item_ids = [int(i) for i in kit.item_ids.split(',') if i]
     items_in_db = Item.query.filter(Item.id.in_(item_ids)).all()
@@ -368,6 +456,7 @@ def export_kit_json(kit_id):
     )
 
 @app.route('/kit/import_json', methods=['POST'])
+@login_required
 def import_kit_json():
     """Import a kit from JSON, creating missing items."""
     if 'kit_file' not in request.files:
@@ -384,14 +473,14 @@ def import_kit_json():
         # Process items
         for item_data in data.get('items', []):
             # Check if item exists by name (to avoid duplicates)
-            existing_item = Item.query.filter_by(name=item_data['name']).first()
+            existing_item = Item.query.filter_by(name=item_data['name'], user_id=current_user.id).first()
             if existing_item:
                 new_item_ids.append(str(existing_item.id))
             else:
                 # Create new item
                 new_item = Item(name=item_data['name'], category=item_data['category'], 
                                 weight=item_data['weight'], cost=item_data['cost'], 
-                                notes=item_data['notes'], image_filename=item_data.get('image_filename'))
+                                notes=item_data['notes'], image_filename=item_data.get('image_filename'), user_id=current_user.id)
                 db.session.add(new_item)
                 db.session.flush() # Get ID without committing
                 new_item_ids.append(str(new_item.id))
@@ -406,7 +495,8 @@ def import_kit_json():
                       notes=data.get('notes', ''),
                       total_weight=total_weight, 
                       total_cost=total_cost, 
-                      item_ids=",".join(new_item_ids))
+                      item_ids=",".join(new_item_ids),
+                      user_id=current_user.id)
         
         db.session.add(new_kit)
         db.session.commit()
@@ -417,15 +507,17 @@ def import_kit_json():
     return redirect(url_for('index'))
 
 @app.route('/kit/<int:kit_id>/pdf')
+@login_required
 def export_kit_pdf(kit_id):
     kit = Kit.query.get_or_404(kit_id)
+    if kit.user_id != current_user.id: return redirect(url_for('index'))
     # Parse IDs
     item_ids = [int(i) for i in kit.item_ids.split(',') if i]
     items_in_db = Item.query.filter(Item.id.in_(item_ids)).all()
     items_map = {item.id: item for item in items_in_db}
     kit_items = [items_map[i_id] for i_id in item_ids if i_id in items_map]
     
-    settings = Settings.query.first()
+    settings = Settings.query.filter_by(user_id=current_user.id).first()
     currency = settings.currency_symbol if settings else '£'
     is_imperial = settings.weight_unit == 'imperial' if settings else False
     username = settings.username if settings else None
@@ -658,9 +750,9 @@ def shutdown():
     os._exit(0)
     return "Application closing..."
 
-def seed_database():
+def seed_database(user_id):
     """Populate the database with initial data if empty."""
-    if Item.query.first():
+    if Item.query.filter_by(user_id=user_id).first():
         return
 
     items_data = [
@@ -754,7 +846,7 @@ def seed_database():
     ]
 
     for item in items_data:
-        db.session.add(Item(**item))
+        db.session.add(Item(**item, user_id=user_id))
     
     db.session.commit()
     print("Database seeded with initial inventory!")
@@ -792,8 +884,19 @@ if __name__ == '__main__':
                 conn.execute(text("ALTER TABLE kit ADD COLUMN notes TEXT"))
                 conn.commit()
                 print("Database updated: Added notes column to kit.")
-                
-        seed_database()
+        
+        # Migration: Check if user_id column exists in item, if not add it
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("SELECT user_id FROM item LIMIT 1"))
+        except Exception:
+            with db.engine.connect() as conn:
+                for table in ['item', 'kit', 'settings']:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN user_id INTEGER"))
+                conn.commit()
+                print("Database updated: Added user_id columns.")
+
+            seed_database()
     
     # Find a free port dynamically
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
