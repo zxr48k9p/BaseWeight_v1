@@ -357,6 +357,15 @@ def save_kit():
     
     return redirect(url_for('index'))
 
+@app.route('/delete_kit/<int:kit_id>')
+@login_required
+def delete_kit(kit_id):
+    kit = Kit.query.get_or_404(kit_id)
+    if kit.user_id != current_user.id: return redirect(url_for('index'))
+    db.session.delete(kit)
+    db.session.commit()
+    return redirect(url_for('index'))
+
 @app.route('/kit/<int:kit_id>')
 @login_required
 def view_kit(kit_id):

@@ -202,12 +202,15 @@
                 </div>
                 <ul class="list-group list-group-flush">
                     {% for kit in kits %}
-                    <a href="{{ url_for('view_kit', kit_id=kit.id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>{{ kit.name }}</strong><br>
-                            <small class="text-muted">{{ kit.total_weight|format_weight }} | {{ settings.currency_symbol }}{{ kit.total_cost }}</small>
-                        </div>
-                    </a>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <a href="{{ url_for('view_kit', kit_id=kit.id) }}" class="text-decoration-none text-light flex-grow-1">
+                            <div>
+                                <strong>{{ kit.name }}</strong><br>
+                                <small class="text-muted">{{ kit.total_weight|format_weight }} | {{ settings.currency_symbol }}{{ kit.total_cost }}</small>
+                            </div>
+                        </a>
+                        <a href="{{ url_for('delete_kit', kit_id=kit.id) }}" class="btn btn-sm btn-outline-danger ms-2" onclick="return confirm('Are you sure you want to delete this kit?');"><i class="bi bi-trash"></i></a>
+                    </li>
                     {% else %}
                     <li class="list-group-item text-muted">No saved kits yet.</li>
                     {% endfor %}
