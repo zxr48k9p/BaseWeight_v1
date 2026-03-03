@@ -100,21 +100,23 @@
                             <td class="text-end">{{ item.weight|format_weight }}</td>
                             <td class="text-end">{{ settings.currency_symbol }}{{ item.cost }}</td>
                             <td class="text-end pe-3">
-                                <button class="btn btn-sm btn-outline-primary me-1" 
-                                        onclick="openEditModal(this)"
-                                        data-id="{{ item.id }}"
-                                        data-name="{{ item.name }}"
-                                        data-category="{{ item.category }}"
-                                        data-weight="{{ item.weight }}"
-                                        data-cost="{{ item.cost }}"
-                                        data-notes="{{ item.notes }}">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <a href="{{ url_for('delete_item', id=item.id) }}" 
-                                   class="btn btn-sm btn-outline-danger" 
-                                   onclick="return confirm('Are you sure you want to delete this item?');">
-                                    <i class="bi bi-trash"></i>
-                                </a>
+                                <div class="d-flex flex-column gap-1 align-items-end">
+                                    <button class="btn btn-sm btn-outline-primary" 
+                                            onclick="openEditModal(this)"
+                                            data-id="{{ item.id }}"
+                                            data-name="{{ item.name }}"
+                                            data-category="{{ item.category }}"
+                                            data-weight="{{ item.weight }}"
+                                            data-cost="{{ item.cost }}"
+                                            data-notes="{{ item.notes }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <a href="{{ url_for('delete_item', id=item.id) }}" 
+                                       class="btn btn-sm btn-outline-danger" 
+                                       onclick="return confirm('Are you sure you want to delete this item?');">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
