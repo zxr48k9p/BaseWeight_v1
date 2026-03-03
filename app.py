@@ -265,8 +265,33 @@ def update_kit(kit_id):
     kit.name = request.form.get('kit_name')
     kit.notes = request.form.get('kit_notes')
     
-    raw_ids = request.form.getlist('selected_items')
-    selected_ids = [x for x in raw_ids if x != '0']
+    # Process items (existing and new)
+    names = request.form.getlist('items_name')
+    cats = request.form.getlist('items_category')
+    ids = request.form.getlist('items_id')
+    weights = request.form.getlist('items_weight')
+    costs = request.form.getlist('items_cost')
+    notes = request.form.getlist('items_notes')
+
+    selected_ids = []
+    for i in range(len(names)):
+        name = names[i].strip()
+        if not name: continue
+        
+        item_id = int(ids[i]) if ids[i] else 0
+        
+        if item_id == 0:
+            # Check if exists or create new
+            existing = Item.query.filter_by(name=name, category=cats[i], user_id=current_user.id).first()
+            if existing:
+                item_id = existing.id
+            else:
+                new_item = Item(name=name, category=cats[i], weight=float(weights[i] or 0), cost=float(costs[i] or 0), notes=notes[i], user_id=current_user.id)
+                db.session.add(new_item)
+                db.session.flush()
+                item_id = new_item.id
+        
+        selected_ids.append(str(item_id))
     
     items = Item.query.filter(Item.id.in_(selected_ids)).all()
     kit.total_weight = sum(i.weight for i in items)
@@ -290,16 +315,40 @@ def delete_item(id):
 def save_kit():
     kit_name = request.form.get('kit_name')
     kit_notes = request.form.get('kit_notes')
-    # Get the list of selected item IDs from the form
-    raw_ids = request.form.getlist('selected_items')
-    selected_ids = [x for x in raw_ids if x != '0']
+    
+    # Process items (existing and new)
+    names = request.form.getlist('items_name')
+    cats = request.form.getlist('items_category')
+    ids = request.form.getlist('items_id')
+    weights = request.form.getlist('items_weight')
+    costs = request.form.getlist('items_cost')
+    notes = request.form.getlist('items_notes')
+
+    selected_ids = []
+    for i in range(len(names)):
+        name = names[i].strip()
+        if not name: continue
+        
+        item_id = int(ids[i]) if ids[i] else 0
+        
+        if item_id == 0:
+            # Check if exists or create new
+            existing = Item.query.filter_by(name=name, category=cats[i], user_id=current_user.id).first()
+            if existing:
+                item_id = existing.id
+            else:
+                new_item = Item(name=name, category=cats[i], weight=float(weights[i] or 0), cost=float(costs[i] or 0), notes=notes[i], user_id=current_user.id)
+                db.session.add(new_item)
+                db.session.flush()
+                item_id = new_item.id
+        
+        selected_ids.append(str(item_id))
     
     # Calculate totals on server side for safety
     items = Item.query.filter(Item.id.in_(selected_ids)).all()
     total_weight = sum(i.weight for i in items)
     total_cost = sum(i.cost for i in items)
     
-    # Join IDs to store as string (e.g., "1,4,5")
     ids_str = ",".join(selected_ids)
     
     new_kit = Kit(name=kit_name, total_weight=total_weight, total_cost=total_cost, item_ids=ids_str, notes=kit_notes, user_id=current_user.id)
