@@ -80,7 +80,7 @@
             <i class="bi bi-power"></i> Close App
         </button>
     </div>
-    <h1 class="mb-4 text-center"><i class="bi bi-compass"></i> BaseWeight Planner</h1>
+    <h1 class="mb-4 text-center"><i class="bi bi-compass"></i> BaseWeight</h1>
 
     <!-- Icon Mapping for Categories -->
     {% set icon_map = {
@@ -105,8 +105,11 @@
                 {% for category in categories %}
                 <div class="card category-card shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <span class="fw-bold text-uppercase small ls-1">
-                            <i class="{{ icon_map.get(category, 'bi-gear') }} me-2"></i> {{ category }}
+                        <span class="fw-bold text-uppercase small ls-1" style="filter: grayscale(100%);">
+                            {% if category in icon_map %}
+                            <i class="{{ icon_map[category] }} me-2"></i>
+                            {% endif %}
+                            {{ category }}
                         </span>
                         <button type="button" class="btn btn-sm btn-primary" onclick="addItemRow(this)">+</button>
                     </div>
@@ -190,8 +193,17 @@
             <a href="{{ url_for('inventory') }}" class="btn btn-outline-light w-100 mb-2">View Full Inventory</a>
 
             <!-- Add New Item Button -->
-            <button class="btn btn-primary w-100 mb-4" data-bs-toggle="modal" data-bs-target="#addItemModal">
+            <button class="btn btn-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#addItemModal">
                 + Add New Item to Inventory
+            </button>
+            <button class="btn btn-outline-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+                + Add Category
+            </button>
+            <button class="btn btn-outline-secondary w-100 mb-4" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal">
+                <i class="bi bi-gear"></i> Manage Categories
+            </button>
+            <button class="btn btn-outline-secondary w-100 mb-4" data-bs-toggle="modal" data-bs-target="#reorderCategoriesModal">
+                <i class="bi bi-arrow-down-up"></i> Reorder Categories
             </button>
 
             <!-- Saved Kits List -->
@@ -305,6 +317,98 @@
     </div>
 </div>
 
+<!-- Modal: Reorder Categories -->
+<div class="modal fade" id="reorderCategoriesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reorder Categories</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">Drag and drop items to reorder your categories.</p>
+                <ul class="list-group" id="sortableCategoryList">
+                    {% for cat in all_categories %}
+                    <li class="list-group-item d-flex align-items-center" data-id="{{ cat.id }}" style="cursor: move;">
+                        <i class="bi bi-grip-vertical text-muted me-2"></i> {{ cat.name }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="saveCategoryOrder()">Save Order</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Add Category -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="/add_category" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Category</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label>Category Name</label>
+                        <div class="input-group">
+                            <input type="text" name="category_name" id="newCatNameIndex" class="form-control" placeholder="e.g., Electronics" required>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">Add Icon:</small><br>
+                            <div class="d-flex flex-wrap gap-1" id="emoji-picker-index"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Add Category</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Manage Categories -->
+<div class="modal fade" id="manageCategoriesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Manage Categories</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <small class="text-muted">Quick Emojis (Click to copy to clipboard):</small><br>
+                    <div class="d-flex flex-wrap gap-1" id="emoji-picker-manage"></div>
+                </div>
+                {% if all_categories %}
+                <ul class="list-group">
+                    {% for cat in all_categories %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <form action="{{ url_for('update_category', id=cat.id) }}" method="POST" class="d-flex flex-grow-1 me-2">
+                            <input type="text" name="name" class="form-control form-control-sm me-2" value="{{ cat.name }}" required>
+                            <button type="submit" class="btn btn-sm btn-success" title="Save Rename"><i class="bi bi-check-lg"></i></button>
+                        </form>
+                        <div class="d-flex">
+                            <a href="{{ url_for('toggle_category', id=cat.id) }}" class="btn btn-sm {{ 'btn-outline-warning' if cat.is_visible else 'btn-outline-secondary' }} me-1" title="{{ 'Hide Category' if cat.is_visible else 'Show Category' }}">
+                                <i class="bi {{ 'bi-eye' if cat.is_visible else 'bi-eye-slash' }}"></i>
+                            </a>
+                            <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete \'{{ cat.name }}\'? Items in this category will remain but will lose their category association.');" title="Delete"><i class="bi bi-trash"></i></a>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center my-3">No categories found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal: Import Kit -->
 <div class="modal fade" id="importKitModal" tabindex="-1">
     <div class="modal-dialog">
@@ -327,6 +431,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 <script>
     function addItemRow(btn) {
         const card = btn.closest('.card');
@@ -498,6 +603,65 @@
                 .catch(error => console.error('Error:', error));
         }
     }
+
+    // --- Category Reordering Logic ---
+    // Initialize SortableJS
+    new Sortable(document.getElementById('sortableCategoryList'), {
+        animation: 150,
+        ghostClass: 'active'
+    });
+
+    function saveCategoryOrder() {
+        const listItems = document.querySelectorAll('#sortableCategoryList li');
+        const orderedIds = Array.from(listItems).map(li => li.getAttribute('data-id'));
+
+        fetch('/reorder_categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ordered_ids: orderedIds })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    // --- Emoji Picker Logic ---
+    const emojis = ["⛺", "🎒", "🥾", "🏔️", "🌲", "🔥", "🔦", "🧭", "🗺️", "🔪", "🪓", "💤", "🍳", "☕", "💧", "🌧️", "🔋", "🩹", "🧻", "🕶️", "🧢", "🧤", "🧥", "👖", "🧦", "🐻", "🦅", "🎣", "🛶", "🌑", "🌌"];
+    
+    function createEmojiButtons(containerId, inputId) {
+        const container = document.getElementById(containerId);
+        if(!container) return;
+        
+        emojis.forEach(emoji => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm btn-outline-secondary border-0';
+            btn.textContent = emoji;
+            btn.onclick = function() {
+                const input = document.getElementById(inputId);
+                input.value = emoji + " " + input.value;
+                input.focus();
+            };
+            container.appendChild(btn);
+        });
+    }
+    createEmojiButtons('emoji-picker-index', 'newCatNameIndex');
+    createEmojiButtons('emoji-picker-manage', null);
+
+    // Check if we need to re-open the Manage Categories modal (after edit/delete/toggle)
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('open_modal') === 'manage') {
+            const modal = new bootstrap.Modal(document.getElementById('manageCategoriesModal'));
+            modal.show();
+            // Clean the URL so a refresh doesn't keep opening it
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    });
 </script>
 
 </body>

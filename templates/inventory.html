@@ -63,12 +63,24 @@
         <h1><i class="bi bi-list-check"></i> Gear Inventory</h1>
         <div>
             <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addItemModal">+ Add Item</button>
+            <button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#addCategoryModal">+ Add Category</button>
+            <button class="btn btn-outline-secondary me-2" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal"><i class="bi bi-gear"></i> Manage Categories</button>
             <a href="{{ url_for('index') }}" class="btn btn-outline-light">Back to Planner</a>
         </div>
     </div>
     
-    <div class="mb-3">
-        <input type="text" id="searchInput" class="form-control" placeholder="Search items by name...">
+    <div class="row mb-3">
+        <div class="col-md-8 mb-2 mb-md-0">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search items by name...">
+        </div>
+        <div class="col-md-4">
+            <select id="categoryFilter" class="form-select">
+                <option value="">All Categories</option>
+                {% for category in categories %}
+                <option value="{{ category }}">{{ category }}</option>
+                {% endfor %}
+            </select>
+        </div>
     </div>
 
     <div class="card shadow-sm">
@@ -176,6 +188,73 @@
     </div>
 </div>
 
+<!-- Modal: Add Category -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="/add_category" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Category</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label>Category Name</label>
+                        <div class="input-group">
+                            <input type="text" name="category_name" id="newCatName" class="form-control" placeholder="e.g., Electronics" required>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">Add Icon:</small><br>
+                            <div class="d-flex flex-wrap gap-1" id="emoji-picker-add"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Add Category</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Manage Categories -->
+<div class="modal fade" id="manageCategoriesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Manage Categories</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <small class="text-muted">Quick Emojis (Click to copy to clipboard):</small><br>
+                    <div class="d-flex flex-wrap gap-1" id="emoji-picker-manage"></div>
+                </div>
+                {% if all_categories %}
+                <ul class="list-group">
+                    {% for cat in all_categories %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <form action="{{ url_for('update_category', id=cat.id) }}" method="POST" class="d-flex flex-grow-1 me-2">
+                            <input type="text" name="name" class="form-control form-control-sm me-2" value="{{ cat.name }}" required>
+                            <button type="submit" class="btn btn-sm btn-success" title="Save Rename"><i class="bi bi-check-lg"></i></button>
+                        </form>
+                        <div class="d-flex">
+                            <a href="{{ url_for('toggle_category', id=cat.id) }}" class="btn btn-sm {{ 'btn-outline-warning' if cat.is_visible else 'btn-outline-secondary' }} me-1" title="{{ 'Hide Category' if cat.is_visible else 'Show Category' }}">
+                                <i class="bi {{ 'bi-eye' if cat.is_visible else 'bi-eye-slash' }}"></i>
+                            </a>
+                            <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete \'{{ cat.name }}\'? Items in this category will remain but will lose their category association.');" title="Delete"><i class="bi bi-trash"></i></a>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center my-3">No categories found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal: Edit Item -->
 <div class="modal fade" id="editItemModal" tabindex="-1">
     <div class="modal-dialog">
@@ -241,19 +320,32 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    document.getElementById('searchInput').addEventListener('keyup', function() {
-        const filter = this.value.toLowerCase();
+    const searchInput = document.getElementById('searchInput');
+    const categoryFilter = document.getElementById('categoryFilter');
+
+    function filterTable() {
+        const searchText = searchInput.value.toLowerCase();
+        const selectedCategory = categoryFilter.value;
         const rows = document.querySelectorAll('tbody tr');
 
         rows.forEach(row => {
-            // The Name is in the third column (Img is 1, Category is 2, Name is 3)
+            const categoryCell = row.querySelector('td:nth-child(2)');
             const nameCell = row.querySelector('td:nth-child(3)');
-            if (nameCell) {
-                const text = nameCell.textContent || nameCell.innerText;
-                row.style.display = text.toLowerCase().includes(filter) ? "" : "none";
+            
+            if (categoryCell && nameCell) {
+                const categoryText = categoryCell.textContent.trim();
+                const nameText = nameCell.textContent.toLowerCase();
+                
+                const matchesSearch = nameText.includes(searchText);
+                const matchesCategory = selectedCategory === "" || categoryText === selectedCategory;
+                
+                row.style.display = (matchesSearch && matchesCategory) ? "" : "none";
             }
         });
-    });
+    }
+
+    searchInput.addEventListener('keyup', filterTable);
+    categoryFilter.addEventListener('change', filterTable);
 
     function openEditModal(btn) {
         // Populate the modal fields with data from the button attributes
@@ -352,6 +444,47 @@
         const modal = new bootstrap.Modal(document.getElementById('imageViewerModal'));
         modal.show();
     }
+
+    // --- Emoji Picker Logic ---
+    const emojis = ["⛺", "🎒", "🥾", "🏔️", "🌲", "🔥", "🔦", "🧭", "🗺️", "🔪", "🪓", "💤", "🍳", "☕", "💧", "🌧️", "🔋", "🩹", "🧻", "🕶️", "🧢", "🧤", "🧥", "👖", "🧦", "🐻", "🦅", "🎣", "🛶", "🌑", "🌌"];
+    
+    function createEmojiButtons(containerId, inputId) {
+        const container = document.getElementById(containerId);
+        if(!container) return;
+        
+        emojis.forEach(emoji => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm btn-outline-secondary border-0';
+            btn.textContent = emoji;
+            btn.onclick = function() {
+                if (inputId) {
+                    const input = document.getElementById(inputId);
+                    input.value = emoji + " " + input.value;
+                    input.focus();
+                } else {
+                    // Copy to clipboard for the manage list
+                    navigator.clipboard.writeText(emoji);
+                    alert("Copied " + emoji + " to clipboard! Paste it into the name field.");
+                }
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    createEmojiButtons('emoji-picker-add', 'newCatName');
+    createEmojiButtons('emoji-picker-manage', null);
+
+    // Check if we need to re-open the Manage Categories modal (after edit/delete/toggle)
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('open_modal') === 'manage') {
+            const modal = new bootstrap.Modal(document.getElementById('manageCategoriesModal'));
+            modal.show();
+            // Clean the URL so a refresh doesn't keep opening it
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    });
 </script>
 </body>
 </html>

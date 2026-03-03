@@ -16,7 +16,7 @@ from reportlab.pdfgen import canvas
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from sqlalchemy import text
+from sqlalchemy import text, func
 
 # Determine if running as a compiled executable (PyInstaller)
 if getattr(sys, 'frozen', False):
@@ -89,12 +89,50 @@ class Settings(db.Model):
     username = db.Column(db.String(100), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
+class Category(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
+    is_visible = db.Column(db.Boolean, default=True)
+
 # Define our fixed categories
-CATEGORIES = [
+DEFAULT_CATEGORIES = [
     "Backpack", "Chestpack", "Shelter", 
     "Sleep System", "Cook System", "Clothing", 
     "Water", "Lighting", "Comfort", "Commodities"
 ]
+
+def get_categories():
+    if not current_user.is_authenticated:
+        return list(DEFAULT_CATEGORIES)
+    
+    # 1. Seed defaults if table is completely empty
+    if Category.query.filter_by(user_id=current_user.id).first() is None:
+        for cat_name in DEFAULT_CATEGORIES:
+            db.session.add(Category(name=cat_name, user_id=current_user.id, sort_order=DEFAULT_CATEGORIES.index(cat_name)))
+        db.session.commit()
+
+    # 2. Sync: Ensure any category currently used by an Item exists in Category table
+    # This ensures panels appear for all items, even if the category was deleted or migrated
+    existing_item_cats = db.session.query(Item.category).filter_by(user_id=current_user.id).distinct().all()
+    item_cat_names = set(row[0] for row in existing_item_cats if row[0])
+    db_cat_names = set(c.name for c in Category.query.filter_by(user_id=current_user.id).all())
+    
+    max_sort = db.session.query(func.max(Category.sort_order)).filter_by(user_id=current_user.id).scalar() or 0
+    new_cats = []
+    for name in item_cat_names:
+        if name not in db_cat_names:
+            max_sort += 1
+            new_cats.append(Category(name=name, user_id=current_user.id, sort_order=max_sort))
+    
+    if new_cats:
+        db.session.add_all(new_cats)
+        db.session.commit()
+        
+    # Return visible categories from DB (sorted by sort_order)
+    cats = Category.query.filter_by(user_id=current_user.id, is_visible=True).order_by(Category.sort_order, Category.id).all()
+    return [c.name for c in cats]
 
 # --- Helpers & Context Processors ---
 
@@ -170,17 +208,19 @@ def logout():
 @app.route('/')
 @login_required
 def index():
+    categories = get_categories()
+    all_categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.sort_order, Category.id).all()
     # Fetch all items to populate dropdowns
     all_items = Item.query.filter_by(user_id=current_user.id).all()
     saved_kits = Kit.query.filter_by(user_id=current_user.id).all()
     
     # Organize items by category for the frontend
-    items_by_cat = {cat: [] for cat in CATEGORIES}
+    items_by_cat = {cat: [] for cat in categories}
     for item in all_items:
         if item.category in items_by_cat:
             items_by_cat[item.category].append(item)
             
-    return render_template('index.html', categories=CATEGORIES, items_by_cat=items_by_cat, kits=saved_kits)
+    return render_template('index.html', categories=categories, all_categories=all_categories, items_by_cat=items_by_cat, kits=saved_kits)
 
 @app.route('/add_item', methods=['POST'])
 @login_required
@@ -202,6 +242,67 @@ def add_item():
     db.session.add(new_item)
     db.session.commit()
     return redirect(request.referrer or url_for('index'))
+
+@app.route('/add_category', methods=['POST'])
+@login_required
+def add_category():
+    name = request.form.get('category_name')
+    if name:
+        name = name.strip()
+        # Check DB directly to avoid duplicates if category exists but is hidden
+        existing = Category.query.filter_by(user_id=current_user.id, name=name).first()
+        if not existing:
+            max_sort = db.session.query(func.max(Category.sort_order)).filter_by(user_id=current_user.id).scalar() or 0
+            new_cat = Category(name=name, user_id=current_user.id, sort_order=max_sort + 1)
+            db.session.add(new_cat)
+            db.session.commit()
+    return redirect(request.referrer or url_for('inventory'))
+
+@app.route('/toggle_category/<int:id>')
+@login_required
+def toggle_category(id):
+    cat = Category.query.get_or_404(id)
+    if cat.user_id != current_user.id: return redirect(url_for('inventory'))
+    cat.is_visible = not cat.is_visible
+    db.session.commit()
+    target = 'inventory' if request.referrer and 'inventory' in request.referrer else 'index'
+    return redirect(url_for(target, open_modal='manage'))
+
+@app.route('/reorder_categories', methods=['POST'])
+@login_required
+def reorder_categories():
+    ordered_ids = request.json.get('ordered_ids', [])
+    for index, cat_id in enumerate(ordered_ids):
+        cat = Category.query.get(cat_id)
+        if cat and cat.user_id == current_user.id:
+            cat.sort_order = index
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+@app.route('/delete_category/<int:id>')
+@login_required
+def delete_category(id):
+    cat = Category.query.get_or_404(id)
+    if cat.user_id != current_user.id: return redirect(url_for('inventory'))
+    db.session.delete(cat)
+    db.session.commit()
+    target = 'inventory' if request.referrer and 'inventory' in request.referrer else 'index'
+    return redirect(url_for(target, open_modal='manage'))
+
+@app.route('/update_category/<int:id>', methods=['POST'])
+@login_required
+def update_category(id):
+    cat = Category.query.get_or_404(id)
+    if cat.user_id != current_user.id: return redirect(url_for('inventory'))
+    new_name = request.form.get('name')
+    if new_name:
+        old_name = cat.name
+        cat.name = new_name.strip()
+        # Update items associated with this category
+        Item.query.filter_by(user_id=current_user.id, category=old_name).update({'category': cat.name})
+        db.session.commit()
+    target = 'inventory' if request.referrer and 'inventory' in request.referrer else 'index'
+    return redirect(url_for(target, open_modal='manage'))
 
 @app.route('/edit_item/<int:id>', methods=['POST'])
 @login_required
@@ -226,6 +327,8 @@ def edit_item(id):
 @app.route('/edit_kit/<int:kit_id>')
 @login_required
 def edit_kit(kit_id):
+    categories = get_categories()
+    all_categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.sort_order, Category.id).all()
     kit = Kit.query.get_or_404(kit_id)
     if kit.user_id != current_user.id: return redirect(url_for('index'))
     # Parse IDs
@@ -237,7 +340,7 @@ def edit_kit(kit_id):
     kit_items = [items_map[i_id] for i_id in item_ids if i_id in items_map]
     
     # Group items by category for the frontend template
-    edit_kit_items_by_cat = {cat: [] for cat in CATEGORIES}
+    edit_kit_items_by_cat = {cat: [] for cat in categories}
     for item in kit_items:
         if item.category in edit_kit_items_by_cat:
             edit_kit_items_by_cat[item.category].append(item)
@@ -245,13 +348,14 @@ def edit_kit(kit_id):
     # Standard fetch for dropdowns
     all_items = Item.query.filter_by(user_id=current_user.id).all()
     saved_kits = Kit.query.filter_by(user_id=current_user.id).all()
-    items_by_cat = {cat: [] for cat in CATEGORIES}
+    items_by_cat = {cat: [] for cat in categories}
     for item in all_items:
         if item.category in items_by_cat:
             items_by_cat[item.category].append(item)
             
     return render_template('index.html', 
-                           categories=CATEGORIES, 
+                           categories=categories, 
+                           all_categories=all_categories,
                            items_by_cat=items_by_cat, 
                            kits=saved_kits,
                            edit_kit=kit,
@@ -386,8 +490,10 @@ def view_kit(kit_id):
 @app.route('/inventory')
 @login_required
 def inventory():
+    category_names = get_categories() # Ensures seeding happens
+    all_categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.id).all()
     items = Item.query.filter_by(user_id=current_user.id).order_by(Item.category, Item.name).all()
-    return render_template('inventory.html', items=items, categories=CATEGORIES)
+    return render_template('inventory.html', items=items, categories=category_names, all_categories=all_categories)
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
@@ -417,6 +523,18 @@ def settings():
         db.session.commit()
         return redirect(url_for('index'))
     return render_template('settings.html', settings=settings)
+
+@app.route('/settings/restore_categories')
+@login_required
+def restore_categories():
+    # Add any missing default categories
+    current_cats = {c.name for c in Category.query.filter_by(user_id=current_user.id).all()}
+    for cat_name in DEFAULT_CATEGORIES:
+        if cat_name not in current_cats:
+            # Append to end
+            db.session.add(Category(name=cat_name, user_id=current_user.id, sort_order=999))
+    db.session.commit()
+    return redirect(url_for('settings'))
 
 @app.route('/backup/download')
 @login_required
@@ -903,6 +1021,11 @@ def seed_database(user_id):
         {"name": "LED Lenser TT", "weight": 130, "cost": 45, "notes": "LED hand torch - disposible battery", "category": "Lighting"},
     ]
 
+    # Seed Categories
+    if Category.query.filter_by(user_id=user_id).count() == 0:
+        for cat_name in DEFAULT_CATEGORIES:
+            db.session.add(Category(name=cat_name, user_id=user_id, sort_order=DEFAULT_CATEGORIES.index(cat_name)))
+    
     for item in items_data:
         db.session.add(Item(**item, user_id=user_id))
     
@@ -942,6 +1065,27 @@ if __name__ == '__main__':
                 conn.execute(text("ALTER TABLE kit ADD COLUMN notes TEXT"))
                 conn.commit()
                 print("Database updated: Added notes column to kit.")
+
+        # Migration: Check if sort_order column exists in category
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("SELECT sort_order FROM category LIMIT 1"))
+        except Exception:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE category ADD COLUMN sort_order INTEGER DEFAULT 0"))
+                conn.execute(text("UPDATE category SET sort_order = id")) # Init with ID order
+                conn.commit()
+                print("Database updated: Added sort_order column to category.")
+
+        # Migration: Check if is_visible column exists in category
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("SELECT is_visible FROM category LIMIT 1"))
+        except Exception:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE category ADD COLUMN is_visible BOOLEAN DEFAULT 1"))
+                conn.commit()
+                print("Database updated: Added is_visible column to category.")
         
         # Migration: Check if user_id column exists in item, if not add it
         try:
