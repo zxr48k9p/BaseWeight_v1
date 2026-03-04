@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         :root {
@@ -53,6 +54,47 @@
             z-index: 9999;
             box-shadow: 0 5px 15px rgba(0,0,0,0.5);
             pointer-events: none;
+        }
+
+        /* Tick List Mode Styles */
+        .tick-list-active tbody tr {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .tick-list-active tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .packed-row {
+            position: relative;
+            background-color: rgba(0, 0, 0, 0.6) !important;
+        }
+        .packed-row td {
+            opacity: 0.2;
+            filter: grayscale(100%);
+        }
+        .packed-row::after {
+            content: "PACKED";
+            position: absolute;
+            left: 0; right: 0; top: 50%;
+            transform: translateY(-50%);
+            text-align: center;
+            color: #556b2f; /* Dark Olive Green */
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: 0.2em;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            display: block;
+        }
+
+        /* Flash Animation for Chart Click */
+        @keyframes flash-highlight {
+            0%, 100% { box-shadow: inset 0 0 0 9999px rgba(107, 142, 35, 0); }
+            50% { box-shadow: inset 0 0 0 9999px rgba(107, 142, 35, 0.5); }
+        }
+        .flash-row > td {
+            animation: flash-highlight 0.8s ease-in-out 2;
         }
     </style>
 </head>
@@ -104,6 +146,10 @@
         </div>
         <div class="col-md-8">
             <div class="card shadow-sm h-100 border-primary">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <h6 class="m-0 text-uppercase text-muted small">Weight Analysis</h6>
+                    <select id="chartFilter" class="form-select form-select-sm w-auto bg-dark text-light border-secondary" onchange="updateChart()"></select>
+                </div>
                 <div class="card-body">
                     <div style="height: 350px;">
                         <canvas id="weightChart"></canvas>
@@ -115,7 +161,17 @@
 
     <!-- Items Table -->
     <div class="card shadow-sm">
-        <div class="card-header">Kit Contents</div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Kit Contents</span>
+            <div class="no-export">
+                <button class="btn btn-sm btn-outline-warning me-2" onclick="resetTickList()">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reset
+                </button>
+                <button id="tickListBtn" class="btn btn-sm btn-outline-secondary" onclick="toggleTickList()">
+                    <i class="bi bi-check2-square"></i> Start Tick-List
+                </button>
+            </div>
+        </div>
         <div class="card-body p-0 table-responsive">
             <table class="table table-striped table-hover mb-0 align-middle">
                 <thead>
@@ -130,7 +186,7 @@
                 </thead>
                 <tbody>
                     {% for item in items %}
-                    <tr>
+                    <tr data-item-name="{{ item.name }}">
                         <td class="d-none d-sm-table-cell">
                             {% if item.image_filename %}
                             <img src="{{ url_for('uploaded_file', filename=item.image_filename) }}" class="img-thumbnail-small" onmouseenter="showPreview(this.src)" onmouseleave="hidePreview()" onclick="viewImage(this.src)">
@@ -179,60 +235,148 @@
     // Prepare data from Jinja
     const items = [
         {% for item in items %}
-        { name: "{{ item.name }}", weight: {{ item.weight }} },
+        { name: "{{ item.name }}", weight: {{ item.weight }}, category: "{{ item.category }}" },
         {% endfor %}
     ];
-
-    // Calculate total weight
-    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
-
-    // Sort items by weight descending and take top 5
-    const topItems = items.sort((a, b) => b.weight - a.weight).slice(0, 5);
-
-    const chartLabels = topItems.map(item => {
-        const pct = totalWeight > 0 ? ((item.weight / totalWeight) * 100).toFixed(1) : 0;
-        return `${item.name} (${pct}%)`;
-    });
-    const chartData = topItems.map(item => item.weight);
+    const isImperial = {{ 'true' if settings.weight_unit == 'imperial' else 'false' }};
 
     // Chart.js Configuration for Dark Theme
     Chart.defaults.color = '#e0e0e0';
     Chart.defaults.borderColor = '#333';
+    // Register the datalabels plugin to draw text on the chart
+    Chart.register(ChartDataLabels);
 
-    const ctx = document.getElementById('weightChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: chartLabels,
-            datasets: [{
-                data: chartData,
-                backgroundColor: [
-                    '#6b8e23', '#556b2f', '#8fbc8f', '#2e8b57', 
-                    '#daa520', '#cd853f', '#8b4513', '#a0522d',
-                    '#4682b4', '#5f9ea0'
-                ],
-                borderWidth: 1,
-                borderColor: '#1e1e1e'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                },
-                title: {
-                    display: true,
-                    text: 'Top 5 Heaviest Items (%)',
-                    color: '#e0e0e0',
-                    font: {
-                        size: 14
-                    }
+    let weightChart;
+
+    // Populate Filter Dropdown
+    const categories = [...new Set(items.map(item => item.category))].sort();
+    const filterSelect = document.getElementById('chartFilter');
+    
+    // Add "All" option
+    const allOption = document.createElement('option');
+    allOption.value = 'all';
+    allOption.textContent = 'Top 5 Heaviest (Overall)';
+    filterSelect.appendChild(allOption);
+
+    // Add Category options
+    categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        filterSelect.appendChild(option);
+    });
+
+    function updateChart() {
+        const selectedCat = filterSelect.value;
+        let filteredItems = [];
+        let title = "";
+        let totalForCalc = 0;
+
+        if (selectedCat === 'all') {
+            filteredItems = [...items].sort((a, b) => b.weight - a.weight).slice(0, 5);
+            title = 'Top 5 Heaviest Items (Overall)';
+            // For overall view, % is based on TOTAL kit weight
+            totalForCalc = items.reduce((sum, item) => sum + item.weight, 0);
+        } else {
+            filteredItems = items.filter(i => i.category === selectedCat).sort((a, b) => b.weight - a.weight);
+            title = `Breakdown: ${selectedCat}`;
+            // For category view, % is based on CATEGORY weight
+            totalForCalc = filteredItems.reduce((sum, item) => sum + item.weight, 0);
+        }
+        
+        const labels = filteredItems.map(item => {
+            const pct = totalForCalc > 0 ? ((item.weight / totalForCalc) * 100).toFixed(1) : 0;
+            return `${item.name} (${pct}%)`;
+        });
+        const data = filteredItems.map(item => item.weight);
+
+        const clickHandler = function(event, elements) {
+            if (elements.length > 0) {
+                const index = elements[0].index;
+                const item = filteredItems[index];
+                if (item) {
+                    scrollToItem(item.name);
                 }
             }
+        };
+
+        if (weightChart) {
+            weightChart.data.labels = labels;
+            weightChart.data.datasets[0].data = data;
+            weightChart.options.plugins.title.text = title;
+            weightChart.options.onClick = clickHandler;
+            weightChart.update();
+        } else {
+            const ctx = document.getElementById('weightChart').getContext('2d');
+            weightChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: [
+                            '#6b8e23', '#556b2f', '#8fbc8f', '#2e8b57', 
+                            '#daa520', '#cd853f', '#8b4513', '#a0522d',
+                            '#4682b4', '#5f9ea0'
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#1e1e1e'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        title: {
+                            display: true,
+                            text: title,
+                            color: '#e0e0e0',
+                            font: { size: 14 }
+                        },
+                        datalabels: {
+                            color: '#ffffff',
+                            font: { weight: 'bold' },
+                            formatter: function(value, context) {
+                                if (isImperial) {
+                                    return (value * 0.035274).toFixed(1) + ' oz';
+                                }
+                                return Math.round(value) + ' g';
+                            },
+                            display: function(context) {
+                                // Hide label if slice is small (< 5% of the visible chart)
+                                var dataset = context.chart.data.datasets[0];
+                                var total = dataset.data.reduce((a, b) => a + b, 0);
+                                return (dataset.data[context.dataIndex] / total) > 0.05;
+                            }
+                        }
+                    },
+                    onClick: clickHandler
+                }
+            });
         }
-    });
+    }
+
+    // Initialize
+    updateChart();
+
+    function scrollToItem(name) {
+        const rows = document.querySelectorAll('tbody tr');
+        for (let row of rows) {
+            if (row.getAttribute('data-item-name') === name) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Trigger flash animation
+                row.classList.remove('flash-row');
+                void row.offsetWidth; // Force reflow
+                row.classList.add('flash-row');
+                
+                // Cleanup
+                setTimeout(() => row.classList.remove('flash-row'), 1600);
+                break;
+            }
+        }
+    }
 
     // --- Image Preview Logic ---
     const popup = document.getElementById('globalImagePopup');
@@ -299,6 +443,46 @@
             alert("Could not generate image. Check console for details.");
         });
     }
+
+    // --- Tick List Logic ---
+    function resetTickList() {
+        const packedRows = document.querySelectorAll('.packed-row');
+        if (packedRows.length > 0) {
+            packedRows.forEach(row => row.classList.remove('packed-row'));
+        }
+    }
+
+    function toggleTickList() {
+        const table = document.querySelector('.table');
+        const btn = document.getElementById('tickListBtn');
+        
+        if (table.classList.contains('tick-list-active')) {
+            // Stop Mode
+            table.classList.remove('tick-list-active');
+            btn.innerHTML = '<i class="bi bi-check2-square"></i> Start Tick-List';
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-secondary');
+        } else {
+            // Start Mode
+            table.classList.add('tick-list-active');
+            btn.innerHTML = '<i class="bi bi-stop-circle"></i> Stop Tick-List';
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-success');
+        }
+    }
+
+    document.querySelector('.table tbody').addEventListener('click', function(e) {
+        const table = document.querySelector('.table');
+        if (!table.classList.contains('tick-list-active')) return;
+        
+        // Prevent triggering if clicking interactive elements (like images/links if any)
+        if (e.target.closest('a') || e.target.closest('button') || e.target.closest('img')) return;
+
+        const row = e.target.closest('tr');
+        if (row) {
+            row.classList.toggle('packed-row');
+        }
+    });
 </script>
 </body>
 </html>
