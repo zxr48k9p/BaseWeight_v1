@@ -641,10 +641,30 @@
             btn.type = 'button';
             btn.className = 'btn btn-sm btn-outline-secondary border-0';
             btn.textContent = emoji;
-            btn.onclick = function() {
-                const input = document.getElementById(inputId);
-                input.value = emoji + " " + input.value;
-                input.focus();
+            btn.onclick = function(e) {
+                if (inputId) {
+                    const input = document.getElementById(inputId);
+                    input.value = emoji + " " + input.value;
+                    input.focus();
+                } else {
+                    // Copy to clipboard for the manage list
+                    navigator.clipboard.writeText(emoji);
+                    
+                    // Show small floating notification at cursor
+                    const el = document.createElement('div');
+                    el.textContent = "Copied to clipboard";
+                    el.style.cssText = `position: fixed; left: ${e.clientX}px; top: ${e.clientY - 30}px; 
+                                      background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; 
+                                      border-radius: 4px; font-size: 12px; pointer-events: none; z-index: 1060;`;
+                    document.body.appendChild(el);
+                    
+                    // Fade out
+                    setTimeout(() => {
+                        el.style.transition = "opacity 0.5s";
+                        el.style.opacity = "0";
+                        setTimeout(() => el.remove(), 500);
+                    }, 800);
+                }
             };
             container.appendChild(btn);
         });
