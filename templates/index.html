@@ -68,19 +68,24 @@
 </head>
 <body>
 
-<div class="container py-5 position-relative">
-    <div class="header-actions position-absolute top-0 end-0 mt-4 me-3">
-        <a href="{{ url_for('settings') }}" class="btn btn-outline-light btn-sm me-2">
-            <i class="bi bi-gear"></i> Settings
-        </a>
-        <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm me-2">
-            <i class="bi bi-box-arrow-right"></i> Logout
-        </a>
-        <button onclick="closeApp()" class="btn btn-outline-danger btn-sm">
-            <i class="bi bi-power"></i> Close App
-        </button>
+<div class="container py-5">
+    <div class="d-block d-md-flex justify-content-center align-items-center position-relative mb-4">
+        <div class="header-actions position-absolute end-0 top-0">
+            <a href="{{ url_for('trips') }}" class="btn btn-outline-light btn-sm me-2">
+                <i class="bi bi-map"></i> Plan a Trip
+            </a>
+            <a href="{{ url_for('settings') }}" class="btn btn-outline-light btn-sm me-2">
+                <i class="bi bi-gear"></i> Settings
+            </a>
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm me-2">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
+            <button onclick="closeApp()" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-power"></i> Close App
+            </button>
+        </div>
+        <h1 class="text-center m-0 w-100"><i class="bi bi-compass"></i> BaseWeight</h1>
     </div>
-    <h1 class="mb-4 text-center"><i class="bi bi-compass"></i> BaseWeight</h1>
 
     <!-- Icon Mapping for Categories -->
     {% set icon_map = {

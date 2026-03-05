@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planned Trips</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --bs-primary: #6b8e23; /* Olive Drab */
+            --bs-body-bg: #0f0f0f;
+            --bs-body-color: #e0e0e0;
+        }
+        body {
+            background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.8)), 
+                        url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=2000&auto=format&fit=crop');
+            background-size: cover;
+            background-attachment: fixed;
+            background-position: center;
+        }
+        .card {
+            background-color: rgba(30, 30, 30, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .trip-card-img {
+            height: 200px;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-map"></i> Planned Trips</h1>
+        <div>
+            <button class="btn btn-outline-info me-2" data-bs-toggle="modal" data-bs-target="#statsModal">
+                <i class="bi bi-bar-chart-fill"></i> Stats
+            </button>
+            <a href="{{ url_for('add_trip') }}" class="btn btn-primary me-2"><i class="bi bi-plus-circle"></i> Plan New Trip</a>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-light">Back to Planner</a>
+        </div>
+    </div>
+
+    {% if trips %}
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for trip in trips %}
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                {% if trip.image_filename %}
+                <img src="{{ url_for('uploaded_file', filename=trip.image_filename) }}" class="card-img-top trip-card-img" alt="{{ trip.name }}">
+                {% else %}
+                <div class="card-img-top trip-card-img bg-dark d-flex align-items-center justify-content-center">
+                    <i class="bi bi-image-alt display-1 text-secondary"></i>
+                </div>
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title">{{ trip.name }}</h5>
+                    {% if trip.date %}
+                    <p class="card-text small text-muted mb-2"><i class="bi bi-calendar3"></i> {{ trip.date.strftime('%d %b %Y') }}</p>
+                    {% endif %}
+                    
+                    <!-- Trip Stats Grid -->
+                    <div class="row g-0 mb-3 text-center small border rounded border-secondary overflow-hidden">
+                        <div class="col-4 border-end border-secondary p-1 bg-dark bg-opacity-50">
+                            <div class="text-muted" style="font-size: 0.7rem;">DIST</div>
+                            <div class="fw-bold">{{ trip.distance if trip.distance else '-' }} km</div>
+                        </div>
+                        <div class="col-4 border-end border-secondary p-1 bg-dark bg-opacity-50">
+                            <div class="text-muted" style="font-size: 0.7rem;">ELEV</div>
+                            <div class="fw-bold">{{ trip.elevation_gain|int if trip.elevation_gain else '-' }} m</div>
+                        </div>
+                        <div class="col-4 p-1 bg-dark bg-opacity-50">
+                            <div class="text-muted" style="font-size: 0.7rem;">STEPS</div>
+                            <div class="fw-bold">{{ trip.steps if trip.steps else '-' }}</div>
+                        </div>
+                    </div>
+
+                    {% if trip.kit %}
+                    <div class="mb-3">
+                        <a href="{{ url_for('view_kit', kit_id=trip.kit.id) }}" class="d-flex justify-content-between align-items-center btn btn-sm btn-outline-success w-100">
+                            <span><i class="bi bi-backpack-fill me-2"></i> {{ trip.kit.name }}</span>
+                            <span class="badge bg-success text-white">{{ trip.kit.total_weight|format_weight }}</span>
+                        </a>
+                    </div>
+                    {% endif %}
+                    <p class="card-text small text-white-50">{{ trip.notes|truncate(100) }}</p>
+                </div>
+                <div class="card-footer bg-transparent border-top-0 pb-3">
+                    {% if trip.gpx_filename %}
+                    <a href="{{ url_for('gpx_file', filename=trip.gpx_filename) }}" class="btn btn-sm btn-outline-info" download>
+                        <i class="bi bi-download"></i> GPX
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('edit_trip', trip_id=trip.id) }}" class="btn btn-sm btn-outline-primary ms-1">
+                        <i class="bi bi-pencil"></i> Edit
+                    </a>
+                    <a href="{{ url_for('delete_trip', trip_id=trip.id) }}" class="btn btn-sm btn-outline-danger ms-1" onclick="return confirm('Are you sure you want to delete this trip?');">
+                        <i class="bi bi-trash"></i> Delete
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <div class="card p-5">
+            <h2>No Trips Planned Yet</h2>
+            <p class="text-muted">Click the button above to plan your first adventure!</p>
+            <div class="mt-3">
+                <a href="{{ url_for('add_trip') }}" class="btn btn-primary btn-lg"><i class="bi bi-plus-circle"></i> Plan New Trip</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Stats Modal -->
+<div class="modal fade" id="statsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background-color: rgba(30, 30, 30, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title"><i class="bi bi-trophy-fill text-warning"></i> Lifetime Stats</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filters -->
+                <div class="mb-4">
+                    <div class="btn-group w-100 mb-2" role="group">
+                        <input type="radio" class="btn-check" name="statsFilter" id="filterAll" autocomplete="off" checked onchange="filterStats('all')">
+                        <label class="btn btn-outline-secondary btn-sm" for="filterAll">All Time</label>
+
+                        <input type="radio" class="btn-check" name="statsFilter" id="filterWeek" autocomplete="off" onchange="filterStats('week')">
+                        <label class="btn btn-outline-secondary btn-sm" for="filterWeek">7 Days</label>
+
+                        <input type="radio" class="btn-check" name="statsFilter" id="filterMonth" autocomplete="off" onchange="filterStats('month')">
+                        <label class="btn btn-outline-secondary btn-sm" for="filterMonth">30 Days</label>
+
+                        <input type="radio" class="btn-check" name="statsFilter" id="filter6Months" autocomplete="off" onchange="filterStats('6months')">
+                        <label class="btn btn-outline-secondary btn-sm" for="filter6Months">6 Mo</label>
+
+                        <input type="radio" class="btn-check" name="statsFilter" id="filterYear" autocomplete="off" onchange="filterStats('year')">
+                        <label class="btn btn-outline-secondary btn-sm" for="filterYear">1 Year</label>
+                        
+                        <input type="radio" class="btn-check" name="statsFilter" id="filterCustom" autocomplete="off" onchange="filterStats('custom')">
+                        <label class="btn btn-outline-secondary btn-sm" for="filterCustom">Custom</label>
+                    </div>
+                    
+                    <div id="customDateRange" class="row g-2" style="display:none;">
+                        <div class="col-6"><input type="date" id="startDate" class="form-control form-control-sm" onchange="filterStats('custom')"></div>
+                        <div class="col-6"><input type="date" id="endDate" class="form-control form-control-sm" onchange="filterStats('custom')"></div>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="row text-center g-3">
+                    <div class="col-6">
+                        <div class="p-3 border border-secondary rounded bg-dark bg-opacity-50 h-100">
+                            <h3 class="fw-bold text-white" id="statCount">{{ stats.count }}</h3>
+                            <small class="text-muted text-uppercase" style="font-size: 0.75rem;">Total Trips</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 border border-secondary rounded bg-dark bg-opacity-50 h-100">
+                            <h3 class="fw-bold text-info"><span id="statDistance">{{ stats.distance|round(1) }}</span> km</h3>
+                            <small class="text-muted text-uppercase" style="font-size: 0.75rem;">Total Distance</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 border border-secondary rounded bg-dark bg-opacity-50 h-100">
+                            <h3 class="fw-bold text-warning"><span id="statElevation">{{ stats.elevation|int }}</span> m</h3>
+                            <small class="text-muted text-uppercase" style="font-size: 0.75rem;">Elevation Gain</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 border border-secondary rounded bg-dark bg-opacity-50 h-100">
+                            <h3 class="fw-bold text-success" id="statSteps">{{ stats.steps }}</h3>
+                            <small class="text-muted text-uppercase" style="font-size: 0.75rem;">Total Steps</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 border border-secondary rounded bg-dark bg-opacity-50 h-100">
+                            <h3 class="fw-bold" style="font-size: 1.1rem;">
+                                <a href="#" id="statPopularKit" class="text-decoration-none text-primary">{{ stats.popular_kit }}</a>
+                            </h3>
+                            <small class="text-muted text-uppercase" style="font-size: 0.75rem;">Most Popular Kit</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 border border-secondary rounded bg-dark bg-opacity-50 h-100">
+                            <h3 class="fw-bold" style="font-size: 1.1rem;">
+                                <a href="#" id="statPopularItem" class="text-decoration-none text-primary">{{ stats.popular_item }}</a>
+                            </h3>
+                            <small class="text-muted text-uppercase" style="font-size: 0.75rem;">Most Popular Item</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Embed trip data for JS filtering
+    const allTrips = [
+        {% for trip in trips %}
+        {
+            date: "{{ trip.date.strftime('%Y-%m-%d') if trip.date else '' }}",
+            distance: {{ trip.distance or 0 }},
+            elevation: {{ trip.elevation_gain or 0 }},
+            steps: {{ trip.steps or 0 }},
+            kitId: {{ trip.kit.id if trip.kit else 'null' }},
+            kitName: "{{ trip.kit.name if trip.kit else '' }}",
+            items: {{ kit_items_map[trip.kit.id]|tojson if trip.kit and trip.kit.id in kit_items_map else [] }}
+        },
+        {% endfor %}
+    ];
+
+    function filterStats(range) {
+        const now = new Date();
+        let startDate = null;
+        let endDate = new Date(); // Default to now
+        
+        // Show/Hide Custom Inputs
+        document.getElementById('customDateRange').style.display = (range === 'custom') ? 'flex' : 'none';
+
+        if (range === 'week') {
+            startDate = new Date();
+            startDate.setDate(now.getDate() - 7);
+        } else if (range === 'month') {
+            startDate = new Date();
+            startDate.setDate(now.getDate() - 30);
+        } else if (range === '6months') {
+            startDate = new Date();
+            startDate.setMonth(now.getMonth() - 6);
+        } else if (range === 'year') {
+            startDate = new Date();
+            startDate.setFullYear(now.getFullYear() - 1);
+        } else if (range === 'custom') {
+            const startVal = document.getElementById('startDate').value;
+            const endVal = document.getElementById('endDate').value;
+            if (startVal) startDate = new Date(startVal);
+            if (endVal) endDate = new Date(endVal);
+        }
+
+        // Calculate Totals
+        let count = 0;
+        let dist = 0;
+        let elev = 0;
+        let steps = 0;
+        let kitCounts = {}; // Map ID -> {count, name}
+        let itemCounts = {};
+
+        allTrips.forEach(trip => {
+            if (!trip.date && range !== 'all') return; // Skip undated trips if filtering
+            
+            let include = true;
+            if (range !== 'all' && startDate) {
+                const tripDate = new Date(trip.date);
+                include = tripDate >= startDate && tripDate <= endDate;
+            }
+
+            if (include) {
+                count++;
+                dist += trip.distance;
+                elev += trip.elevation;
+                steps += trip.steps;
+                
+                if (trip.kitId) {
+                    if (!kitCounts[trip.kitId]) kitCounts[trip.kitId] = { count: 0, name: trip.kitName };
+                    kitCounts[trip.kitId].count++;
+                }
+                if (trip.items) {
+                    trip.items.forEach(item => {
+                        itemCounts[item] = (itemCounts[item] || 0) + 1;
+                    });
+                }
+            }
+        });
+
+        // Find most popular kit
+        let maxKit = 0;
+        let popKitId = null;
+        let popKitName = "None";
+        for (let id in kitCounts) {
+            if (kitCounts[id].count > maxKit) {
+                maxKit = kitCounts[id].count;
+                popKitId = id;
+                popKitName = kitCounts[id].name;
+            }
+        }
+
+        // Find most popular item
+        let maxItem = 0;
+        let popItemName = "None";
+        for (let name in itemCounts) {
+            if (itemCounts[name] > maxItem) {
+                maxItem = itemCounts[name];
+                popItemName = name;
+            }
+        }
+
+        // Update DOM
+        document.getElementById('statCount').textContent = count;
+        document.getElementById('statDistance').textContent = dist.toFixed(1);
+        document.getElementById('statElevation').textContent = Math.round(elev);
+        document.getElementById('statSteps').textContent = steps;
+        
+        const kitLink = document.getElementById('statPopularKit');
+        kitLink.textContent = popKitName;
+        kitLink.href = popKitId ? "{{ url_for('view_kit', kit_id=0) }}".replace('0', popKitId) : "#";
+        
+        const itemLink = document.getElementById('statPopularItem');
+        itemLink.textContent = popItemName;
+        // Link to the popular kit, highlighting the item
+        if (popKitId && popItemName !== "None") {
+            itemLink.href = "{{ url_for('view_kit', kit_id=0) }}".replace('0', popKitId) + "?item=" + encodeURIComponent(popItemName);
+        } else {
+            itemLink.href = "#";
+        }
+    }
+
+    // Initialize stats on load
+    document.addEventListener('DOMContentLoaded', function() {
+        filterStats('all');
+    });
+</script>
+</body>
+</html>

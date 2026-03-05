@@ -17,6 +17,8 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from sqlalchemy import text, func
+from datetime import datetime
+from collections import Counter
 
 # Determine if running as a compiled executable (PyInstaller)
 if getattr(sys, 'frozen', False):
@@ -43,6 +45,11 @@ UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+GPX_UPLOAD_FOLDER = os.path.join(basedir, 'gpx_files')
+if not os.path.exists(GPX_UPLOAD_FOLDER):
+    os.makedirs(GPX_UPLOAD_FOLDER)
+app.config['GPX_UPLOAD_FOLDER'] = GPX_UPLOAD_FOLDER
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -95,6 +102,20 @@ class Category(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     sort_order = db.Column(db.Integer, default=0)
     is_visible = db.Column(db.Boolean, default=True)
+
+class Trip(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    distance = db.Column(db.Float, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    image_filename = db.Column(db.String(255), nullable=True)
+    gpx_filename = db.Column(db.String(255), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    kit_id = db.Column(db.Integer, db.ForeignKey('kit.id'), nullable=True)
+    kit = db.relationship('Kit', backref='trips')
+    steps = db.Column(db.Integer, nullable=True)
+    elevation_gain = db.Column(db.Float, nullable=True) # in meters
+    date = db.Column(db.Date, nullable=True)
 
 # Define our fixed categories
 DEFAULT_CATEGORIES = [
@@ -499,6 +520,149 @@ def inventory():
 def uploaded_file(filename):
     """Serve uploaded files."""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/gpx_files/<filename>')
+def gpx_file(filename):
+    """Serve uploaded GPX files."""
+    return send_from_directory(app.config['GPX_UPLOAD_FOLDER'], filename)
+
+# --- Trip Planning Routes ---
+
+@app.route('/trips')
+@login_required
+def trips():
+    user_trips = Trip.query.filter_by(user_id=current_user.id).order_by(Trip.id.desc()).all()
+    
+    # Pre-fetch all items for name lookup
+    all_items = Item.query.filter_by(user_id=current_user.id).all()
+    item_name_map = {str(i.id): i.name for i in all_items}
+    
+    # Build map of kit_id -> list of item names for frontend filtering
+    kit_items_map = {}
+    all_trip_kits = []
+    all_trip_items = []
+
+    for t in user_trips:
+        if t.kit:
+            all_trip_kits.append(t.kit.name)
+            if t.kit.id not in kit_items_map:
+                # Parse item IDs from the kit
+                i_ids = [i for i in t.kit.item_ids.split(',') if i]
+                i_names = [item_name_map[i] for i in i_ids if i in item_name_map]
+                kit_items_map[t.kit.id] = i_names
+            all_trip_items.extend(kit_items_map[t.kit.id])
+    
+    # Calculate cumulative stats
+    stats = {
+        'count': len(user_trips),
+        'distance': sum(t.distance for t in user_trips if t.distance),
+        'elevation': sum(t.elevation_gain for t in user_trips if t.elevation_gain),
+        'steps': sum(t.steps for t in user_trips if t.steps),
+        'popular_kit': Counter(all_trip_kits).most_common(1)[0][0] if all_trip_kits else "None",
+        'popular_item': Counter(all_trip_items).most_common(1)[0][0] if all_trip_items else "None"
+    }
+    return render_template('trips.html', trips=user_trips, stats=stats, kit_items_map=kit_items_map)
+
+@app.route('/trip/add', methods=['GET', 'POST'])
+@login_required
+def add_trip():
+    if request.method == 'POST':
+        name = request.form.get('name')
+        distance = request.form.get('distance')
+        notes = request.form.get('notes')
+        kit_id = request.form.get('kit_id')
+        steps = request.form.get('steps')
+        elevation_gain = request.form.get('elevation_gain')
+        date_str = request.form.get('date')
+
+        image_filename = None
+        image_file = request.files.get('image')
+        if image_file and image_file.filename:
+            image_filename = secure_filename(image_file.filename)
+            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+
+        gpx_filename = None
+        gpx_file = request.files.get('gpx_file')
+        if gpx_file and gpx_file.filename:
+            gpx_filename = secure_filename(gpx_file.filename)
+            gpx_file.save(os.path.join(app.config['GPX_UPLOAD_FOLDER'], gpx_filename))
+
+        new_trip = Trip(
+            name=name,
+            distance=float(distance) if distance else None,
+            notes=notes,
+            image_filename=image_filename,
+            gpx_filename=gpx_filename,
+            user_id=current_user.id,
+            kit_id=int(kit_id) if kit_id and int(kit_id) != 0 else None,
+            steps=int(steps) if steps else None,
+            elevation_gain=float(elevation_gain) if elevation_gain else None,
+            date=datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else None
+        )
+        db.session.add(new_trip)
+        db.session.commit()
+        return redirect(url_for('trips'))
+        
+    kits = Kit.query.filter_by(user_id=current_user.id).all()
+    return render_template('add_trip.html', trip=None, kits=kits)
+
+@app.route('/trip/edit/<int:trip_id>', methods=['GET', 'POST'])
+@login_required
+def edit_trip(trip_id):
+    trip = Trip.query.get_or_404(trip_id)
+    if trip.user_id != current_user.id:
+        return redirect(url_for('trips'))
+    
+    if request.method == 'POST':
+        trip.name = request.form.get('name')
+        trip.distance = float(request.form.get('distance')) if request.form.get('distance') else None
+        trip.notes = request.form.get('notes')
+        kit_id = request.form.get('kit_id')
+        trip.kit_id = int(kit_id) if kit_id and int(kit_id) != 0 else None
+        trip.steps = int(request.form.get('steps')) if request.form.get('steps') else None
+        trip.elevation_gain = float(request.form.get('elevation_gain')) if request.form.get('elevation_gain') else None
+        date_str = request.form.get('date')
+        trip.date = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else None
+
+        image_file = request.files.get('image')
+        if image_file and image_file.filename:
+            image_filename = secure_filename(image_file.filename)
+            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+            trip.image_filename = image_filename
+
+        gpx_file = request.files.get('gpx_file')
+        if gpx_file and gpx_file.filename:
+            gpx_filename = secure_filename(gpx_file.filename)
+            gpx_file.save(os.path.join(app.config['GPX_UPLOAD_FOLDER'], gpx_filename))
+            trip.gpx_filename = gpx_filename
+            
+        db.session.commit()
+        return redirect(url_for('trips'))
+
+    kits = Kit.query.filter_by(user_id=current_user.id).all()
+    return render_template('add_trip.html', trip=trip, kits=kits)
+
+@app.route('/trip/delete/<int:trip_id>')
+@login_required
+def delete_trip(trip_id):
+    trip = Trip.query.get_or_404(trip_id)
+    if trip.user_id != current_user.id:
+        return redirect(url_for('trips'))
+    
+    if trip.image_filename:
+        try:
+            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], trip.image_filename))
+        except OSError:
+            pass
+    if trip.gpx_filename:
+        try:
+            os.remove(os.path.join(app.config['GPX_UPLOAD_FOLDER'], trip.gpx_filename))
+        except OSError:
+            pass
+
+    db.session.delete(trip)
+    db.session.commit()
+    return redirect(url_for('trips'))
 
 # API Endpoint for JavaScript to fetch item details instantly
 @app.route('/api/item/<int:id>')
@@ -1093,12 +1257,50 @@ if __name__ == '__main__':
                 conn.execute(text("SELECT user_id FROM item LIMIT 1"))
         except Exception:
             with db.engine.connect() as conn:
-                for table in ['item', 'kit', 'settings']:
+                for table in ['item', 'kit', 'settings', 'category']:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN user_id INTEGER"))
                 conn.commit()
                 print("Database updated: Added user_id columns.")
+        
+        # Migration: Check if kit_id column exists in trip
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("SELECT kit_id FROM trip LIMIT 1"))
+        except Exception:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE trip ADD COLUMN kit_id INTEGER"))
+                conn.commit()
+                print("Database updated: Added kit_id column to trip.")
 
-            seed_database()
+        # Migration: Check if steps column exists in trip
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("SELECT steps FROM trip LIMIT 1"))
+        except Exception:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE trip ADD COLUMN steps INTEGER"))
+                conn.commit()
+                print("Database updated: Added steps column to trip.")
+
+        # Migration: Check if elevation_gain column exists in trip
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("SELECT elevation_gain FROM trip LIMIT 1"))
+        except Exception:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE trip ADD COLUMN elevation_gain FLOAT"))
+                conn.commit()
+                print("Database updated: Added elevation_gain column to trip.")
+
+        # Migration: Check if date column exists in trip
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("SELECT date FROM trip LIMIT 1"))
+        except Exception:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE trip ADD COLUMN date DATE"))
+                conn.commit()
+                print("Database updated: Added date column to trip.")
     
     # Find a free port dynamically
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -483,6 +483,17 @@
             row.classList.toggle('packed-row');
         }
     });
+
+    // Check for item query param on load to highlight specific item
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const itemToHighlight = urlParams.get('item');
+        if (itemToHighlight) {
+            setTimeout(() => {
+                scrollToItem(itemToHighlight);
+            }, 300);
+        }
+    });
 </script>
 </body>
 </html>
