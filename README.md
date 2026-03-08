@@ -2,6 +2,8 @@
 
 BaseWeight is a desktop application designed to help hikers and backpackers plan their gear loadouts. It allows you to inventory your gear, create custom packing lists (kits), and visualize your pack weight and cost.
 
+**Live Demo:** [https://zxr48k9p.pythonanywhere.com/](https://zxr48k9p.pythonanywhere.com/)
+
 ### Dashboard
 ![Dashboard Screenshot](screenshots/dashboard.jpg)
 
