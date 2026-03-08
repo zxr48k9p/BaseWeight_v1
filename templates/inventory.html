@@ -90,11 +90,11 @@
                     <thead>
                         <tr>
                             <th class="ps-3">Img</th>
-                            <th class="ps-3 sortable" onclick="sortTable(0)">Category <i class="bi bi-arrow-down-up small text-muted"></i></th>
-                            <th class="sortable" onclick="sortTable(1)">Name <i class="bi bi-arrow-down-up small text-muted"></i></th>
+                            <th class="ps-3 sortable" onclick="sortTable(1)">Category <i class="bi bi-arrow-down-up small text-muted"></i></th>
+                            <th class="sortable" onclick="sortTable(2)">Name <i class="bi bi-arrow-down-up small text-muted"></i></th>
                             <th class="d-none d-md-table-cell">Notes</th>
-                            <th class="text-end sortable" onclick="sortTable(3)">Weight <i class="bi bi-arrow-down-up small text-muted"></i></th>
-                            <th class="text-end sortable" onclick="sortTable(4)">Cost ({{ settings.currency_symbol }}) <i class="bi bi-arrow-down-up small text-muted"></i></th>
+                            <th class="text-end sortable" onclick="sortTable(4)">Weight <i class="bi bi-arrow-down-up small text-muted"></i></th>
+                            <th class="text-end sortable" onclick="sortTable(5)">Cost ({{ settings.currency_symbol }}) <i class="bi bi-arrow-down-up small text-muted"></i></th>
                             <th class="text-end pe-3">Actions</th>
                         </tr>
                     </thead>
@@ -106,11 +106,11 @@
                                 <img src="{{ url_for('uploaded_file', filename=item.image_filename) }}" class="img-thumbnail-small" onmouseenter="showPreview(this.src)" onmouseleave="hidePreview()" onclick="viewImage(this.src)">
                                 {% endif %}
                             </td>
-                            <td class="ps-3"><span class="badge">{{ item.category }}</span></td>
-                            <td class="fw-bold">{{ item.name }}</td>
+                            <td class="ps-3" data-value="{{ item.category }}"><span class="badge">{{ item.category }}</span></td>
+                            <td class="fw-bold" data-value="{{ item.name }}">{{ item.name }}</td>
                             <td class="text-muted small d-none d-md-table-cell">{{ item.notes }}</td>
-                            <td class="text-end">{{ item.weight|format_weight }}</td>
-                            <td class="text-end">{{ settings.currency_symbol }}{{ item.cost }}</td>
+                            <td class="text-end" data-value="{{ item.weight }}">{{ item.weight|format_weight }}</td>
+                            <td class="text-end" data-value="{{ item.cost }}">{{ settings.currency_symbol }}{{ item.cost }}</td>
                             <td class="text-end pe-3">
                                 <div class="d-flex flex-column gap-1 align-items-end">
                                     <button class="btn btn-sm btn-outline-primary" 
@@ -379,9 +379,9 @@
                 x = rows[i].getElementsByTagName("TD")[n];
                 y = rows[i + 1].getElementsByTagName("TD")[n];
                 
-                // Extract text and clean it up (remove currency symbols, 'g', etc)
-                let xContent = x.innerText.toLowerCase().replace(/[£g]/g, '').trim();
-                let yContent = y.innerText.toLowerCase().replace(/[£g]/g, '').trim();
+                // Use data-value for accurate sorting
+                let xContent = x.getAttribute('data-value') || x.innerText.toLowerCase();
+                let yContent = y.getAttribute('data-value') || y.innerText.toLowerCase();
                 
                 // Check if numeric
                 const xNum = parseFloat(xContent);
@@ -391,8 +391,10 @@
                     if (dir == "asc" && xNum > yNum) { shouldSwitch = true; break; }
                     if (dir == "desc" && xNum < yNum) { shouldSwitch = true; break; }
                 } else {
-                    if (dir == "asc" && xContent > yContent) { shouldSwitch = true; break; }
-                    if (dir == "desc" && xContent < yContent) { shouldSwitch = true; break; }
+                    let xStr = xContent.toString().toLowerCase();
+                    let yStr = yContent.toString().toLowerCase();
+                    if (dir == "asc" && xStr > yStr) { shouldSwitch = true; break; }
+                    if (dir == "desc" && xStr < yStr) { shouldSwitch = true; break; }
                 }
             }
             if (shouldSwitch) {
