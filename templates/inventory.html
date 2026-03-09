@@ -268,7 +268,7 @@
             </div>
             <div class="modal-footer border-secondary">
                 <button type="button" class="btn btn-secondary" data-bs-target="#manageCategoriesModal" data-bs-toggle="modal">Cancel</button>
-                <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-danger">Delete</a>
+                <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-danger" onclick="handleAction(event)">Delete</a>
             </div>
         </div>
     </div>
@@ -287,7 +287,7 @@
             <div class="modal-body">Are you sure you want to delete <strong>{{ item.name }}</strong>?</div>
             <div class="modal-footer border-secondary">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <a href="{{ url_for('delete_item', id=item.id) }}" class="btn btn-danger">Delete</a>
+                <a href="{{ url_for('delete_item', id=item.id) }}" class="btn btn-danger" onclick="handleAction(event)">Delete</a>
             </div>
         </div>
     </div>
@@ -516,9 +516,66 @@
     createEmojiButtons('emoji-picker-add', 'newCatName');
     createEmojiButtons('emoji-picker-manage', null);
 
-    // Check if we need to re-open the Manage Categories modal (after edit/delete/toggle)
+    // --- LOGIC FOR PERSISTING FILTERS ---
+
+    function handleAction(event) {
+        event.preventDefault(); // Stop the link from navigating immediately
+        const link = event.currentTarget;
+        const search = searchInput.value;
+        const category = categoryFilter.value;
+        
+        const url = new URL(link.href);
+        url.searchParams.set('search', search);
+        url.searchParams.set('category', category);
+        
+        // For categories, we also need to ensure the modal re-opens
+        if (url.pathname.includes('/delete_category/')) {
+            url.searchParams.set('open_modal', 'manage');
+        }
+        
+        window.location.href = url.toString();
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+        // Add submit listeners to forms to inject filter data
+        const forms = [
+            document.querySelector('#addItemModal form'),
+            document.querySelector('#editItemModal form'),
+            document.querySelector('#addCategoryModal form'),
+            ...document.querySelectorAll('#manageCategoriesModal form') // Can be multiple
+        ];
+        
+        forms.forEach(form => {
+            if (!form) return;
+            form.addEventListener('submit', function(event) {
+                const search = searchInput.value;
+                const category = categoryFilter.value;
+
+                // Create and append hidden inputs
+                let searchInputEl = document.createElement('input');
+                searchInputEl.type = 'hidden';
+                searchInputEl.name = 'filter_search';
+                searchInputEl.value = search;
+                form.appendChild(searchInputEl);
+
+                let categoryInputEl = document.createElement('input');
+                categoryInputEl.type = 'hidden';
+                categoryInputEl.name = 'filter_category';
+                categoryInputEl.value = category;
+                form.appendChild(categoryInputEl);
+            });
+        });
+
         const urlParams = new URLSearchParams(window.location.search);
+
+        // Restore filters from URL
+        const searchParam = url_params.get('search');
+        const categoryParam = url_params.get('category');
+        if (searchParam) { searchInput.value = searchParam; }
+        if (categoryParam) { categoryFilter.value = categoryParam; }
+        if (searchParam || categoryParam) { filterTable(); }
+
+        // Check if we need to re-open the Manage Categories modal
         if (urlParams.get('open_modal') === 'manage') {
             const modalEl = document.getElementById('manageCategoriesModal');
             if (modalEl) {

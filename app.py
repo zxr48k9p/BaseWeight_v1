@@ -262,6 +262,11 @@ def add_item():
     new_item = Item(name=name, category=category, weight=weight, cost=cost, notes=notes, image_filename=image_filename, user_id=current_user.id)
     db.session.add(new_item)
     db.session.commit()
+
+    if 'inventory' in (request.referrer or ''):
+        search = request.form.get('filter_search')
+        category = request.form.get('filter_category')
+        return redirect(url_for('inventory', search=search, category=category))
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/add_category', methods=['POST'])
@@ -277,6 +282,11 @@ def add_category():
             new_cat = Category(name=name, user_id=current_user.id, sort_order=max_sort + 1)
             db.session.add(new_cat)
             db.session.commit()
+
+    if 'inventory' in (request.referrer or ''):
+        search = request.form.get('filter_search')
+        category = request.form.get('filter_category')
+        return redirect(url_for('inventory', search=search, category=category, open_modal='manage'))
     return redirect(request.referrer or url_for('inventory'))
 
 @app.route('/toggle_category/<int:id>')
@@ -314,8 +324,14 @@ def delete_category(id):
         
     db.session.delete(cat)
     db.session.commit()
-    target = 'inventory' if request.referrer and 'inventory' in request.referrer else 'index'
-    return redirect(url_for(target, open_modal='manage'))
+    target = 'inventory' if 'inventory' in (request.referrer or '') else 'index'
+    if target == 'inventory':
+        search = request.args.get('search')
+        category = request.args.get('category')
+        open_modal = request.args.get('open_modal')
+        return redirect(url_for('inventory', search=search, category=category, open_modal=open_modal))
+    else: # redirect to index
+        return redirect(url_for('index', open_modal='manage'))
 
 @app.route('/update_category/<int:id>', methods=['POST'])
 @login_required
@@ -329,8 +345,13 @@ def update_category(id):
         # Update items associated with this category
         Item.query.filter_by(user_id=current_user.id, category=old_name).update({'category': cat.name})
         db.session.commit()
-    target = 'inventory' if request.referrer and 'inventory' in request.referrer else 'index'
-    return redirect(url_for(target, open_modal='manage'))
+    target = 'inventory' if 'inventory' in (request.referrer or '') else 'index'
+    if target == 'inventory':
+        search = request.form.get('filter_search')
+        category = request.form.get('filter_category')
+        return redirect(url_for('inventory', search=search, category=category, open_modal='manage'))
+    else:
+        return redirect(url_for('index', open_modal='manage'))
 
 @app.route('/edit_item/<int:id>', methods=['POST'])
 @login_required
@@ -350,6 +371,10 @@ def edit_item(id):
         item.image_filename = filename
     
     db.session.commit()
+    if 'inventory' in (request.referrer or ''):
+        search = request.form.get('filter_search')
+        category = request.form.get('filter_category')
+        return redirect(url_for('inventory', search=search, category=category))
     return redirect(request.referrer or url_for('inventory'))
 
 @app.route('/edit_kit/<int:kit_id>')
@@ -440,6 +465,10 @@ def delete_item(id):
     if item.user_id != current_user.id: return redirect(url_for('index'))
     db.session.delete(item)
     db.session.commit()
+    if 'inventory' in (request.referrer or ''):
+        search = request.args.get('search')
+        category = request.args.get('category')
+        return redirect(url_for('inventory', search=search, category=category))
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/save_kit', methods=['POST'])
