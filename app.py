@@ -306,6 +306,12 @@ def reorder_categories():
 def delete_category(id):
     cat = Category.query.get_or_404(id)
     if cat.user_id != current_user.id: return redirect(url_for('inventory'))
+    
+    # Update items to remove this category association so it doesn't auto-regenerate
+    items = Item.query.filter_by(user_id=current_user.id, category=cat.name).all()
+    for item in items:
+        item.category = "Uncategorized"
+        
     db.session.delete(cat)
     db.session.commit()
     target = 'inventory' if request.referrer and 'inventory' in request.referrer else 'index'
