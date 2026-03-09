@@ -569,8 +569,8 @@
         const urlParams = new URLSearchParams(window.location.search);
 
         // Restore filters from URL
-        const searchParam = url_params.get('search');
-        const categoryParam = url_params.get('category');
+        const searchParam = urlParams.get('search');
+        const categoryParam = urlParams.get('category');
         if (searchParam) { searchInput.value = searchParam; }
         if (categoryParam) { categoryFilter.value = categoryParam; }
         if (searchParam || categoryParam) { filterTable(); }
