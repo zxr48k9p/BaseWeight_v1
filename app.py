@@ -512,8 +512,9 @@ def view_kit(kit_id):
 @app.route('/inventory')
 @login_required
 def inventory():
-    category_names = get_categories() # Ensures seeding happens
+    get_categories() # Ensures seeding happens
     all_categories = Category.query.filter_by(user_id=current_user.id).order_by(Category.id).all()
+    category_names = [c.name for c in all_categories]
     items = Item.query.filter_by(user_id=current_user.id).order_by(Item.category, Item.name).all()
     return render_template('inventory.html', items=items, categories=category_names, all_categories=all_categories)
 

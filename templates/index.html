@@ -398,9 +398,34 @@
                             <button type="submit" class="btn btn-sm btn-success" title="Save Rename"><i class="bi bi-check-lg"></i></button>
                         </form>
                         <div class="d-flex">
-                            <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete \'{{ cat.name }}\'? Items in this category will remain but will lose their category association.');" title="Delete"><i class="bi bi-trash"></i></a>
+                            <a href="{{ url_for('toggle_category', id=cat.id) }}" class="btn btn-sm {{ 'btn-outline-warning' if cat.is_visible else 'btn-outline-secondary' }} me-1" title="{{ 'Hide Category' if cat.is_visible else 'Show Category' }}">
+                                <i class="bi {{ 'bi-eye' if cat.is_visible else 'bi-eye-slash' }}"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteCategoryModal{{ cat.id }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
                         </div>
                     </li>
+
+                    <!-- Delete Category Modal -->
+                    <div class="modal fade" id="deleteCategoryModal{{ cat.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content" style="background-color: rgba(30, 30, 30, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1);">
+                                <div class="modal-header border-secondary">
+                                    <h5 class="modal-title">Delete Category</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-target="#manageCategoriesModal" data-bs-toggle="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    Delete <strong>{{ cat.name }}</strong>?<br>
+                                    <small class="text-muted">Items in this category will remain but will lose their category association.</small>
+                                </div>
+                                <div class="modal-footer border-secondary">
+                                    <button type="button" class="btn btn-secondary" data-bs-target="#manageCategoriesModal" data-bs-toggle="modal">Cancel</button>
+                                    <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-danger">Delete</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     {% endfor %}
                 </ul>
                 {% else %}
@@ -678,10 +703,14 @@
     document.addEventListener('DOMContentLoaded', function() {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('open_modal') === 'manage') {
-            const modal = new bootstrap.Modal(document.getElementById('manageCategoriesModal'));
-            modal.show();
-            // Clean the URL so a refresh doesn't keep opening it
-            window.history.replaceState({}, document.title, window.location.pathname);
+            const modalEl = document.getElementById('manageCategoriesModal');
+            if (modalEl) {
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+                // Clean the URL so a refresh doesn't keep opening it
+                const newUrl = window.location.pathname + window.location.hash;
+                window.history.replaceState({}, document.title, newUrl);
+            }
         }
     });
 </script>
