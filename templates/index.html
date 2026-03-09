@@ -406,26 +406,6 @@
                             </button>
                         </div>
                     </li>
-
-                    <!-- Delete Category Modal -->
-                    <div class="modal fade" id="deleteCategoryModal{{ cat.id }}" tabindex="-1" aria-hidden="true">
-                        <div class="modal-dialog modal-dialog-centered">
-                            <div class="modal-content" style="background-color: rgba(30, 30, 30, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1);">
-                                <div class="modal-header border-secondary">
-                                    <h5 class="modal-title">Delete Category</h5>
-                                    <button type="button" class="btn-close btn-close-white" data-bs-target="#manageCategoriesModal" data-bs-toggle="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    Delete <strong>{{ cat.name }}</strong>?<br>
-                                    <small class="text-muted">Items in this category will remain but will lose their category association.</small>
-                                </div>
-                                <div class="modal-footer border-secondary">
-                                    <button type="button" class="btn btn-secondary" data-bs-target="#manageCategoriesModal" data-bs-toggle="modal">Cancel</button>
-                                    <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-danger">Delete</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                     {% endfor %}
                 </ul>
                 {% else %}
@@ -435,6 +415,28 @@
         </div>
     </div>
 </div>
+
+<!-- Delete Category Modals (Moved outside to prevent nesting) -->
+{% for cat in all_categories %}
+<div class="modal fade" id="deleteCategoryModal{{ cat.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background-color: rgba(30, 30, 30, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title">Delete Category</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-target="#manageCategoriesModal" data-bs-toggle="modal"></button>
+            </div>
+            <div class="modal-body">
+                Delete <strong>{{ cat.name }}</strong>?<br>
+                <small class="text-muted">Items in this category will remain but will lose their category association.</small>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-target="#manageCategoriesModal" data-bs-toggle="modal">Cancel</button>
+                <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-danger">Delete</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
 
 <!-- Modal: Import Kit -->
 <div class="modal fade" id="importKitModal" tabindex="-1">
