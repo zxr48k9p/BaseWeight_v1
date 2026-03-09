@@ -467,6 +467,7 @@
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 <script>
     function addItemRow(btn) {
+        btn.blur();
         const card = btn.closest('.card');
         const container = card.querySelector('.items-container');
         const firstRow = container.querySelector('.item-row');
@@ -493,6 +494,7 @@
     }
 
     function removeRow(btn) {
+        btn.blur();
         const row = btn.closest('.item-row');
         const container = row.parentElement;
         
