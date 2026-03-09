@@ -123,7 +123,23 @@
                                             data-notes="{{ item.notes }}">
                                         <i class="bi bi-pencil"></i>
                                     </button>
-                                    <a href="{{ url_for('delete_item', id=item.id) }}" 
+                                    <!-- Themed Delete Confirmation -->
+                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal{{ item.id }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+
+                                    <!-- Delete Confirmation Modal -->
+                                    <div class="modal fade" id="deleteItemModal{{ item.id }}" tabindex="-1" aria-labelledby="deleteItemModalLabel{{ item.id }}" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content" style="background-color: rgba(30, 30, 30, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1);">
+                                                <div class="modal-header" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                                                    <h5 class="modal-title" id="deleteItemModalLabel{{ item.id }}">Delete Confirmation</h5>
+                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">Are you sure you want to delete <strong>{{ item.name }}</strong>?</div>
+                                                <div class="modal-footer" style="border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <a href="{{ url_for('delete_item', id=item.id) }}"
                                        class="btn btn-sm btn-outline-danger" 
                                        onclick="return confirm('Are you sure you want to delete this item?');">
                                         <i class="bi bi-trash"></i>
@@ -239,9 +255,6 @@
                             <button type="submit" class="btn btn-sm btn-success" title="Save Rename"><i class="bi bi-check-lg"></i></button>
                         </form>
                         <div class="d-flex">
-                            <a href="{{ url_for('toggle_category', id=cat.id) }}" class="btn btn-sm {{ 'btn-outline-warning' if cat.is_visible else 'btn-outline-secondary' }} me-1" title="{{ 'Hide Category' if cat.is_visible else 'Show Category' }}">
-                                <i class="bi {{ 'bi-eye' if cat.is_visible else 'bi-eye-slash' }}"></i>
-                            </a>
                             <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete \'{{ cat.name }}\'? Items in this category will remain but will lose their category association.');" title="Delete"><i class="bi bi-trash"></i></a>
                         </div>
                     </li>

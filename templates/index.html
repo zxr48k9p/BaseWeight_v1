@@ -398,9 +398,6 @@
                             <button type="submit" class="btn btn-sm btn-success" title="Save Rename"><i class="bi bi-check-lg"></i></button>
                         </form>
                         <div class="d-flex">
-                            <a href="{{ url_for('toggle_category', id=cat.id) }}" class="btn btn-sm {{ 'btn-outline-warning' if cat.is_visible else 'btn-outline-secondary' }} me-1" title="{{ 'Hide Category' if cat.is_visible else 'Show Category' }}">
-                                <i class="bi {{ 'bi-eye' if cat.is_visible else 'bi-eye-slash' }}"></i>
-                            </a>
                             <a href="{{ url_for('delete_category', id=cat.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete \'{{ cat.name }}\'? Items in this category will remain but will lose their category association.');" title="Delete"><i class="bi bi-trash"></i></a>
                         </div>
                     </li>

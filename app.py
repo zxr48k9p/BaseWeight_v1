@@ -283,7 +283,8 @@ def add_category():
 @login_required
 def toggle_category(id):
     cat = Category.query.get_or_404(id)
-    if cat.user_id != current_user.id: return redirect(url_for('inventory'))
+    if cat.user_id != current_user.id:
+        return redirect(url_for('inventory'))
     cat.is_visible = not cat.is_visible
     db.session.commit()
     target = 'inventory' if request.referrer and 'inventory' in request.referrer else 'index'
